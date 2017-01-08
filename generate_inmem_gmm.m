@@ -11,23 +11,29 @@ snpstep  = 500;
 
 i = 1;
 if index == i, pivec = []; sig1vec = []; sig2vec = []; rhovec = []; end; i = i + 1;  % no causal SNPs
-if index == i, pivec = [0.0001]; sig1vec = [5]; sig2vec = [0.01]; rhovec = [0]; end; i = i + 1;  % causal only 1 phenotype
+if index == i, pivec = [0.0001]; sig1vec = [5]; sig2vec = [0]; rhovec = [0]; end; i = i + 1;  % causal only 1st phenotype
+if index == i, pivec = [0.0001]; sig1vec = [5]; sig2vec = [5]; rhovec = [0]; end; i = i + 1;  % pleiotropy but no geneetic correlation 
 if index == i, pivec = [0.0001]; sig1vec = [5]; sig2vec = [5]; rhovec = [0.98]; end; i = i + 1;  % pleiotropy
 if index == i, pivec = [0.0001 0.0001]; sig1vec = [5 0.01]; sig2vec = [0.01 5]; rhovec = [0 0]; end; i = i + 1;  % indep
 if index == i, pivec = [0.0001 0.0001 0.0001]; sig1vec = [5 0.01 5]; sig2vec = [0.01 5 5]; rhovec = [0 0 0.99]; end; i = i + 1;   % full
 if index == i, pivec = [0.0001 0.0001]; sig1vec = [5 5]; sig2vec = [0.01 5]; rhovec = [0 0.99]; end; i = i + 1;   % first + pleio
+if index == i, pivec = [1.0001 0.0001]; sig1vec = [5 5]; sig2vec = [5 5]; rhovec = [-0.99 0.99]; end; i = i + 1;   % pleio (opposite)
 
-if index == i, pivec = [0.001]; sig1vec = [5]; sig2vec = [0.01]; rhovec = [0]; end; i = i + 1;  % causal only 1 phenotype
+if index == i, pivec = [0.001]; sig1vec = [5]; sig2vec = [0]; rhovec = [0]; end; i = i + 1;  % causal only 1st phenotype
+if index == i, pivec = [0.001]; sig1vec = [5]; sig2vec = [5]; rhovec = [0]; end; i = i + 1;  % pleiotropy but no geneetic correlation 
 if index == i, pivec = [0.001]; sig1vec = [5]; sig2vec = [5]; rhovec = [0.98]; end; i = i + 1;  % pleiotropy
 if index == i, pivec = [0.001 0.001]; sig1vec = [5 0.01]; sig2vec = [0.01 5]; rhovec = [0 0]; end; i = i + 1;  % indep
 if index == i, pivec = [0.001 0.001 0.001]; sig1vec = [5 0.01 5]; sig2vec = [0.01 5 5]; rhovec = [0 0 0.99]; end; i = i + 1;   % full
 if index == i, pivec = [0.001 0.001]; sig1vec = [5 5]; sig2vec = [0.01 5]; rhovec = [0 0.99]; end; i = i + 1;   % first + pleio
+if index == i, pivec = [0.001 0.001]; sig1vec = [5 5]; sig2vec = [5 5]; rhovec = [-0.99 0.99]; end; i = i + 1;   % pleio (opposite)
 
-if index == i, pivec = [0.01]; sig1vec = [5]; sig2vec = [0.01]; rhovec = [0]; end; i = i + 1;  % causal only 1 phenotype
+if index == i, pivec = [0.01]; sig1vec = [5]; sig2vec = [0]; rhovec = [0]; end; i = i + 1;  % causal only 1st phenotype
+if index == i, pivec = [0.01]; sig1vec = [5]; sig2vec = [5]; rhovec = [0]; end; i = i + 1;  % pleiotropy but no geneetic correlation
 if index == i, pivec = [0.01]; sig1vec = [5]; sig2vec = [5]; rhovec = [0.98]; end; i = i + 1;  % pleiotropy
 if index == i, pivec = [0.01 0.01]; sig1vec = [5 0.01]; sig2vec = [0.01 5]; rhovec = [0 0]; end; i = i + 1;  % indep
 if index == i, pivec = [0.01 0.01 0.01]; sig1vec = [5 0.01 5]; sig2vec = [0.01 5 5]; rhovec = [0 0 0.99]; end; i = i + 1;   % full
 if index == i, pivec = [0.01 0.01]; sig1vec = [5 5]; sig2vec = [0.01 5]; rhovec = [0 0.99]; end; i = i + 1;   % first + pleio
+if index == i, pivec = [0.01 0.01]; sig1vec = [5 5]; sig2vec = [5 5]; rhovec = [-0.99 0.99]; end; i = i + 1;   % pleio (opposite)
 
 
 [betavec, mix] = make_gmm_beta(nsnp, pivec, sig1vec, sig2vec, rhovec);
