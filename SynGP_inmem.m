@@ -1,4 +1,4 @@
-function [zvec, nvec, betavec, rhovec, logpvec] = SynGP_inmem(bfile, reffile, nsubj, nsnp, betavec, h2, subj_idx, snpstep, matfile)
+function [zvec, nvec, betavec, rhovec, logpvec, mix] = SynGP_inmem(bfile, reffile, nsubj, nsnp, betavec, h2, subj_idx, snpstep, mix, matfile)
 % SynGP_inmem converts true effect size (betavec) into GWAS estimate (rhovec, pvec)
 % bfile --- plink b-file to read genotypes, example: 'EUR_10K_2M_merged/all'
 % reffile --- superset of SNPs to align the result
@@ -73,6 +73,7 @@ fprintf('OK. \n');
 betavec = align_to_ref(betavec, nsnp_ref, index_to_ref);
 rhovec  = align_to_ref(rhovec, nsnp_ref, index_to_ref);
 pvec    = align_to_ref(pvec, nsnp_ref, index_to_ref);
+mix     = align_to_ref(mix, nsnp_ref, index_to_ref);
 
 logpvec = -log10(pvec);
 logpvec(isinf(logpvec)) = -log10(realmin);

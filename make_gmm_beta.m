@@ -1,4 +1,4 @@
-function betamat = make_gmm_beta(nsnp, pivec, sig1vec, sig2vec, rhovec)
+function [betamat, mix] = make_gmm_beta(nsnp, pivec, sig1vec, sig2vec, rhovec)
     % MAKE_GMM_PHENO generates two vectors of effect sizes from gaussian mixture model
     % make_gmm_beta(10000, [0.01], [1.0], [1.0], [0.5])
 
@@ -9,6 +9,7 @@ function betamat = make_gmm_beta(nsnp, pivec, sig1vec, sig2vec, rhovec)
     end;
 
     betamat = zeros(nsnp, 2);
+    mix = zeros(nsnp, 1);
     num_mixtures = length(pivec);
 
     idx = randperm(nsnp); idx_start = 1;
@@ -21,6 +22,7 @@ function betamat = make_gmm_beta(nsnp, pivec, sig1vec, sig2vec, rhovec)
 
         idx_end = idx_start + num_causals - 1;
         betamat(idx(idx_start:idx_end), :) = mvnrnd(mu, sigma, num_causals);
-        idx_start = idx_start + num_causals;
+        mix(idx(idx_start:idx_end), :) = i;
+	idx_start = idx_start + num_causals;
     end
 end
