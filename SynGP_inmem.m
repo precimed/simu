@@ -41,6 +41,7 @@ for i=1:snpstep:length(betavec_idx)
     %fprintf('.');
     e = min(i+snpstep, length(betavec_idx));
     X = double(G(betavec_idx(i:e))); X = (X-repmat(mean(X,1),nsubj,1));
+    X = X ./ repmat(std(X), [nsubj, 1]);
     truePhenotype = truePhenotype + X * betavec(betavec_idx(i:e));
 end
 
@@ -62,6 +63,7 @@ for i=1:snpstep:nsnp
     %fprintf('.');
     e = min(i+snpstep, nsnp);
     X = double(G(i:e)); X = (X-repmat(mean(X,1),nsubj,1));
+    X = X ./ repmat(std(X), [nsubj, 1]);
     [rhovec_tmp, pvec_tmp] = corr(X(subj_idx, :), double(observedPhenotype(subj_idx)));
     if any(isnan(rhovec_tmp)) || any(isnan(pvec_tmp)), error('corr return nan\n'); end;
     rhovec(i:e) = rhovec_tmp;
