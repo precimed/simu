@@ -36,6 +36,21 @@ if index == i, pivec = [0.01 0.01 0.01]; sig1vec = [5 0.0 5]; sig2vec = [0.0 5 5
 if index == i, pivec = [0.01 0.01]; sig1vec = [5 5]; sig2vec = [0.0 5]; rhovec = [0 0.99]; end; i = i + 1;   % first + pleio
 if index == i, pivec = [0.01 0.01]; sig1vec = [5 5]; sig2vec = [5 5]; rhovec = [-0.99 0.99]; end; i = i + 1;   % pleio (opposite)
 
+i = 101;
+if index == i, pivec = [0.0001 0.0001 0.0001]; sig1vec = [5 0.0 3]; sig2vec = [0.0 5 3]; rhovec = [0 0 0]; end; i = i + 1;  % indep (big) + pleio_no_correlation (small)
+if index == i, pivec = [0.0001 0.0001 0.0001]; sig1vec = [3 0.0 5]; sig2vec = [0.0 3 5]; rhovec = [0 0 0]; end; i = i + 1;  % indep (small) + pleio_no_correlation (big)
+if index == i, pivec = [0.0001 0.0001 0.0001 0.0001]; sig1vec = [5 0.0 3 3]; sig2vec = [0.0 5 3 3]; rhovec = [0 0 -0.99 0.99]; end; i = i + 1;   % indep (big) + pleio opposite (small) 
+if index == i, pivec = [0.0001 0.0001 0.0001 0.0001]; sig1vec = [3 0.0 5 5]; sig2vec = [0.0 3 5 5]; rhovec = [0 0 -0.99 0.99]; end; i = i + 1;   % indep(small) pleio (opposite), big
+
+if index == i, pivec = [0.001 0.001 0.001]; sig1vec = [5 0.0 3]; sig2vec = [0.0 5 3]; rhovec = [0 0 0]; end; i = i + 1;  % indep (big) + pleio_no_correlation (small)
+if index == i, pivec = [0.001 0.001 0.001]; sig1vec = [3 0.0 5]; sig2vec = [0.0 3 5]; rhovec = [0 0 0]; end; i = i + 1;  % indep (small) + pleio_no_correlation (big)
+if index == i, pivec = [0.001 0.001 0.001 0.001]; sig1vec = [5 0.0 3 3]; sig2vec = [0.0 5 3 3]; rhovec = [0 0 -0.99 0.99]; end; i = i + 1;   % indep (big) + pleio opposite (small) 
+if index == i, pivec = [0.001 0.001 0.001 0.001]; sig1vec = [3 0.0 5 5]; sig2vec = [0.0 3 5 5]; rhovec = [0 0 -0.99 0.99]; end; i = i + 1;   % indep(small) pleio (opposite), big
+
+if index == i, pivec = [0.01 0.01 0.01]; sig1vec = [5 0.0 3]; sig2vec = [0.0 5 3]; rhovec = [0 0 0]; end; i = i + 1;  % indep (big) + pleio_no_correlation (small)
+if index == i, pivec = [0.01 0.01 0.01]; sig1vec = [3 0.0 5]; sig2vec = [0.0 3 5]; rhovec = [0 0 0]; end; i = i + 1;  % indep (small) + pleio_no_correlation (big)
+if index == i, pivec = [0.01 0.01 0.01 0.01]; sig1vec = [5 0.0 3 3]; sig2vec = [0.0 5 3 3]; rhovec = [0 0 -0.99 0.99]; end; i = i + 1;   % indep (big) + pleio opposite (small) 
+if index == i, pivec = [0.01 0.01 0.01 0.01]; sig1vec = [3 0.0 5 5]; sig2vec = [0.0 3 5 5]; rhovec = [0 0 -0.99 0.99]; end; i = i + 1;   % indep(small) pleio (opposite), big
 
 [betavec, mix] = make_gmm_beta(nsnp, pivec, sig1vec, sig2vec, rhovec);
 %nsnp2 = floor(nsnp/2);betavec((nsnp2:nsnp)', 1) = 0;betavec((1:nsnp2)', 2) = 0;
