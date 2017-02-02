@@ -5,6 +5,20 @@
 # 
 # Required database - 1kGP phase 3 functional db 
 # Chun C. Fan
+#
+# Adapter to Abel cluster environment by oleksanf.
+# Before running ensure that all data exist on Abel server.
+# mkdir /work/users/oleksanf/MMIL/
+# mkdir /work/users/oleksanf/MMIL/1000Genome
+# mkdir /work/users/oleksanf/MMIL/cfan_SQLdb
+# mkdir /work/users/oleksanf/tmp
+# rsync -avzP --update oleksandr@login.norstore.uio.no:/projects/NS9114K/MMIL/1000Genome/* /work/users/oleksanf/MMIL/1000Genome
+# rsync -avzP --update oleksandr@login.norstore.uio.no:/projects/NS9114K/MMIL/cfan_SQLdb/* /work/users/oleksanf/MMIL/cfan_SQLdb
+#
+# download and unpack latest HapGen2 from https://mathgen.stats.ox.ac.uk/genetics_software/hapgen/hapgen2.html
+# mkdir ~/hapgen2 && cd ~/hapgen2 && wget https://mathgen.stats.ox.ac.uk/genetics_software/hapgen/download/builds/x86_64/v2.2.0/hapgen2_x86_64.tar.gz
+
+
 
 import argparse
 import datetime
@@ -17,15 +31,15 @@ import sys
 
 # Input parameters
 parser = argparse.ArgumentParser()
-parser.add_argument('--hapgen', action="store", dest="bstem", default='/home/cfan/HAPGEN2/hapgen2', help="executable binary of HAPGEN2")
-parser.add_argument('--gen', action="store", dest="gstem",default='/space/syn03/1/data/cfan/1000Genome/phase3/build37_released/EUR', help="hap and legend file folders")
-parser.add_argument('--recomb', action="store", dest="rstem",default='/space/syn03/1/data/cfan/1000Genome/phase3/build37_released/recombination_map', help="recombination maps folders")
+parser.add_argument('--hapgen', action="store", dest="bstem", default='/usit/abel/u1/oleksanf/hapgen2/hapgen2', help="executable binary of HAPGEN2")
+parser.add_argument('--gen', action="store", dest="gstem",default='/work/users/oleksanf/MMIL/1000Genome/phase3/build37_released/EUR', help="hap and legend file folders")
+parser.add_argument('--recomb', action="store", dest="rstem",default='/work/users/oleksanf/MMIL/1000Genome/phase3/build37_released/recombination_map', help="recombination maps folders")
 parser.add_argument('--pop', action="store", dest="popf",default='EUR', help="Type of allele frequencies, EUR, EAS, AMR, or AFR")
 parser.add_argument('--controls', dest="controls", default=100000, action="store", help="Number of controls we wish to generate")
 parser.add_argument('--chunk_int', dest="chunk", default=10000, action="store", help="Chunk size for each output")
-parser.add_argument('--db', action="store", dest="db", default="/space/syn03/1/data/cfan/SQLdb/Functional_Annot_1kGP_hg19.db", help="SQL database use for allele frequencies and physical positions")
+parser.add_argument('--db', action="store", dest="db", default="/work/users/oleksanf/MMIL/cfan_SQLdb/Functional_Annot_1kGP_hg19.db", help="SQL database use for allele frequencies and physical positions")
 parser.add_argument('--out', action="store", dest="output", default=None, help="output absolute path and prefix")
-parser.add_argument('--tmp', action="store", dest="tmp", default="/home/cfan/codes/tmp", help="place for temporary script shells")
+parser.add_argument('--tmp', action="store", dest="tmp", default="/work/users/oleksanf/tmp", help="place for temporary script shells")
 args = parser.parse_args()
 
 # immutable parameters
@@ -88,7 +102,7 @@ class GetParametersOf:
     self.db = WeightsDB()
 
   def __call__(self, chrnum):
-    print datetime.datetime.now(), "Generating parameters for chromosome ", chrnum
+    print("{now} Generating parameters for chromosome {chr}".format(now=datetime.datetime.now(), chr=chrnum))
     t = (str(chrnum),)
     FNAME = POPTMP + '_AF'
     tmp = [(tup[0],tup[1],tup[2]) for tup in self.db.query("SELECT pos, rsid, %s FROM functionDB WHERE chrnum=?" % (FNAME), t)]
@@ -116,8 +130,8 @@ for i in range(1,23):
     write_tmp(tmp_fname, cmd0)
     tmp_log = TMPDIR + '/tmp_script_chr' + str(i) + '_chunk' + str(k)
     cmdsub = 'qsub -hard -l h_vmem=32G -e ' + tmp_log + '_1' + ' -o ' + tmp_log + '_2' + ' -N Simu_chr' + str(i) + '_' + str(k) + ' ' + tmp_fname + '\n'
-    os.system('ssh -XY 169.228.56.67 ' + cmdsub)
-    #print 'ssh -XY 169.228.56.67' + cmdsub
+    #os.system('ssh -XY 169.228.56.67 ' + cmdsub)
+    print(cmdsub)
     k += 1
 
 
