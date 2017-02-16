@@ -1,14 +1,17 @@
-index 
-%index = 1;     % to be defined by caller
-%simupop = 'C:\Users\oleksanf\Dropbox\analysis\2016_09_September_22_Bivariate\SYNGP';
-simupop = '/work/users/oleksanf';
+index     %index = 1;     % to be defined by caller
 
-reffile = fullfile(simupop, '1m_ref');
-bfile = fullfile(simupop, 'EUR_10K_1M_merged', 'all');
+config = struct();
 
-nsubj    = 100000;
-nsnp     = 1188973;
-snpstep  = 100;
+% A subset of 80M and 1M template (w_hm3)
+config.frames.EUR_10K_1188K_merged.subj = 10000;
+config.frames.EUR_10K_1188K_merged.snps = 1188973;
+config.frames.EUR_10K_1188K_merged.reader = @(subjvec, snpvec)merged_frame_reader(subjvec, snpvec, 10000, 'H:\NORSTORE\SYNGP\EUR_10K_1M_merged\all');
+config.frames.EUR_10K_1188K_merged.bim = PlinkRead_bim('H:\NORSTORE\SYNGP\EUR_10K_1M_merged\all');
+
+% Matlab 1M reference template (w_hm3)
+config.frames.EUR_10K_1190K_ref.subj = 10000;
+config.frames.EUR_10K_1190K_ref.snps = 1190321;
+config.frames.EUR_10K_1190K_ref.bim  = PlinkRead_bim('H:\NORSTORE\SYNGP\1m_ref', true, '%s %s %f %d %s %s %s %s');
 
 i = 1;
 if index == i, pivec = []; sig1vec = []; sig2vec = []; rhovec = []; end; i = i + 1;  % no causal SNPs
@@ -52,32 +55,39 @@ if index == i, pivec = [0.01 0.01 0.01]; sig1vec = [3 0.0 5]; sig2vec = [0.0 3 5
 if index == i, pivec = [0.01 0.01 0.01 0.01]; sig1vec = [5 0.0 3 3]; sig2vec = [0.0 5 3 3]; rhovec = [0 0 -0.99 0.99]; end; i = i + 1;   % indep (big) + pleio opposite (small) 
 if index == i, pivec = [0.01 0.01 0.01 0.01]; sig1vec = [3 0.0 5 5]; sig2vec = [0.0 3 5 5]; rhovec = [0 0 -0.99 0.99]; end; i = i + 1;   % indep(small) pleio (opposite), big
 
-[betavec, mix] = make_gmm_beta(nsnp, pivec, sig1vec, sig2vec, rhovec);
-%nsnp2 = floor(nsnp/2);betavec((nsnp2:nsnp)', 1) = 0;betavec((1:nsnp2)', 2) = 0;
+frame = make_empty_frame (config, 'EUR_10K_1188K_merged');
+frame = make_truebeta_gmm(frame, config, 'pivec', pivec, 'sig1vec', sig1vec, 'sig2vec', sig2vec, 'rhovec', rhovec);
+%plot(frame.truebeta(:, 1), frame.truebeta(:, 2), '.')
 
-%figure(index)
-%plot(betavec(:, 1), betavec(:, 2), '.')
+frame = make_truepheno   (frame, config, 'snpstep', 100);
+frame = make_phenotype   (frame, config, 'h2', 0.9);
 
-h2 = 0.9;
-
+nsubj = frame.subj;
 s500 = floor(nsubj/2); s501 = s500+1; s1000 = nsubj;
 s333 = floor(nsubj/3); s334 = s333+1; s667 = 2*s333+1;
 
-% n = no overlap
-[zvec1n, nvec1n, betavec1n, rhovec1n, logpvec1n, mix1n] = SynGP_inmem(bfile, reffile, nsubj, nsnp, betavec(:, 1), h2, 1:s500, snpstep, mix);
-[zvec2n, nvec2n, betavec2n, rhovec2n, logpvec2n, mix2n] = SynGP_inmem(bfile, reffile, nsubj, nsnp, betavec(:, 2), h2, s501:s1000, snpstep, mix);
+fprintf('n = no overlap\n');
+frameN = make_gwas    (frame,  config, 'snpstep', 100, 'subj_idx', {1:s500, s501:s1000});
+frameN = make_gwaslogp(frameN, config);
+frameN = reframe      (frameN, config, 'EUR_10K_1190K_ref');
 
-% p = partial overlap
-[zvec1p, nvec1p, betavec1p, rhovec1p, logpvec1p, mix1p] = SynGP_inmem(bfile, reffile, nsubj, nsnp, betavec(:, 1), h2, 1:s667, snpstep, mix);
-[zvec2p, nvec2p, betavec2p, rhovec2p, logpvec2p, mix2p] = SynGP_inmem(bfile, reffile, nsubj, nsnp, betavec(:, 2), h2, s334:s1000, snpstep, mix);
+fprintf('p = partial overlap\n');
+frameP = make_gwas    (frame,  config, 'snpstep', 100, 'subj_idx', {1:s667, s334:s1000});
+frameP = make_gwaslogp(frameP, config);
+frameP = reframe      (frameP, config, 'EUR_10K_1190K_ref');
 
-% f = full overlap
-[zvec1f, nvec1f, betavec1f, rhovec1f, logpvec1f, mix1f] = SynGP_inmem(bfile, reffile, nsubj, nsnp, betavec(:, 1), h2, 1:s1000, snpstep, mix);
-[zvec2f, nvec2f, betavec2f, rhovec2f, logpvec2f, mix2f] = SynGP_inmem(bfile, reffile, nsubj, nsnp, betavec(:, 2), h2, 1:s1000, snpstep, mix);
+fprintf('f = full overlap\n');
+frameF = make_gwas    (frame,  config, 'snpstep', 100, 'subj_idx', {1:s1000, 1:s1000});
+frameF = make_gwaslogp(frameF, config);
+frameF = reframe      (frameF, config, 'EUR_10K_1190K_ref');
 
-save(sprintf('result_%i.mat', index));
+save(sprintf('result_%i.mat', index), 'frameF', 'frameN', 'frameP');
 
 %plot(betavec(:, 1), betavec(:, 2), '.')
 %plot(zvec1n, zvec2n, '.')
 %plot(zvec1p, zvec2p, '.')
 %plot(zvec1f, zvec2f, '.')
+
+
+
+
