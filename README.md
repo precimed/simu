@@ -28,6 +28,7 @@ Within each frame we can store vectors of length "snps" or "subj", for example:
 * gwassize  - number of subjects per SNPS involved in GWAS
 * gwaslogp   - minus decimal logarithm of p-value
 * gwaszscore - signed summary statistic from GWAS
+* genofreq   - genotype frequencies (AA, Aa, aa)
 
 In addition to these vectors or matrices each frame has meta-information:
 * snps - number of SNPs in the frame
@@ -44,6 +45,7 @@ It is possible to create frames and fill them with data using these methods:
 - make_phenotype
 - make_gwas
 - make_gwaslogp
+- make_genofreq
 
 Most of these methods accept three arguments:
 - a frame (except 'make_empty_frame'),
