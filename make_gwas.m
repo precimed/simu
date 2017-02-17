@@ -11,6 +11,9 @@ function frame = make_gwas(frame, config, varargin)
     
     parse(p, varargin{:}); opts = p.Results;
     
+    if frame.subj ~= config.frames.(frame.name).subj, error('Number of subjects mismatch'); end;
+    if frame.snps ~= config.frames.(frame.name).snps, error('Number of SNPs mismatch'); end;
+
     nsnp = frame.snps;
     nsubj = frame.subj;
     snpstep = opts.snpstep;

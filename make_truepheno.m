@@ -12,6 +12,7 @@ function frame = make_truepheno(frame, config, varargin)
     reader = config.frames.(frame.name).reader;
     
     frame.truepheno = nan(nsubj, ntraits);
+    beginningOfTime = now;
     for trait = 1:ntraits
         betavec = frame.truebeta(:, trait);
         betavec_idx = find(betavec ~= 0);
@@ -23,6 +24,7 @@ function frame = make_truepheno(frame, config, varargin)
             X = double(genotypes); X = (X-repmat(mean(X,1),nsubj,1));
             if opts.stdnorm, X = X ./ repmat(std(X), [nsubj, 1]); end;
             truePhenotype = truePhenotype + X * betavec(betavec_idx(i:e));
+            fprintf(1,'make_truepheno (trait %i of %i): %.1f%% done, Now:%s eta:%s\n', trait, ntraits, 100 * (i+snpstep) / length(betavec_idx), datestr(now,'dddd HH:MM:SS'),datestr(beginningOfTime+(now-beginningOfTime)/(i+snpstep)*length(betavec_idx)));
         end
 
         frame.truepheno(:, trait) = truePhenotype;
