@@ -2,9 +2,12 @@ function frame = make_truepheno(frame, config, varargin)
     % MAKE_TRUEPHENO generates true phenotypes (without adding environmental noise)
 
     p = inputParser;
-    addOptional(p, 'snpstep', 10000);  % how many SNPs to scan per one iteration
+    addOptional(p, 'snpstep', 100);  % how many SNPs to scan per one iteration
     addOptional(p, 'stdnorm', false);  % normalize genotypes as in LD score regression (=> rare SNPs has larger effect size)
     parse(p, varargin{:}); opts = p.Results;
+
+    if frame.subj ~= config.frames.(frame.name).subj, error('Number of subjects mismatch'); end;
+    if frame.snps ~= config.frames.(frame.name).snps, error('Number of SNPs mismatch'); end;
 
     nsubj = frame.subj;
     snpstep = opts.snpstep;

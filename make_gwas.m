@@ -2,7 +2,7 @@ function frame = make_gwas(frame, config, varargin)
     % MAKE_GWAS generates gwas estimates of effect size and corresponding p-value
 
     p = inputParser;
-    addOptional(p, 'snpstep', 10000);  % how many SNPs to scan per one iteration
+    addOptional(p, 'snpstep', 100);    % how many SNPs to scan per one iteration
     addOptional(p, 'subj_idx', {});    % which subjects to involve in GWAS
     % subj_idx can be
     % - empty
