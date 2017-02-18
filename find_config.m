@@ -57,3 +57,9 @@ config.frames.EUR_100K_1188K_merged.bim = PlinkRead_bim(fullfile(norstore_path, 
 config.frames.EUR_100K_1190K_ref.subj = 100000;
 config.frames.EUR_100K_1190K_ref.snps = 1190321;
 config.frames.EUR_100K_1190K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, 'SYNGP/1m_ref'), true, '%s %s %f %d %s %s %s %s');
+
+fn = fieldnames(config.frames);
+for i=1:length(fn)
+    frame = config.frames.(fn{i});
+    if isfield(frame, 'bim') && (length(frame.bim.snplist) ~= frame.snps), error('Error in frame %s - SNPs mismatch', fn{i}); end;
+end
