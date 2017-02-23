@@ -10,13 +10,13 @@ This data is split into chromosomes and chunks; all chunk files share the same s
 
 We extract several subsets of this data to speedup preliminary computations. For example,
 
-- Folder '<NORSTORE>/SYNGP/EUR_10K_2M_merged' contain first 10K individuals and 2518104 SNPs.
+- Folder `<NORSTORE>/SYNGP/EUR_10K_2M_merged` contain first 10K individuals and 2518104 SNPs.
   Here 2518104 is a subset of 2558411 SNPs that we commonly use in matlab code.
-- Folder '<NORSTORE>/SYNGP/EUR_100K_1M_merged' contains all 100K individuals, but just 1188973 SNPs.
+- Folder `<NORSTORE>/SYNGP/EUR_100K_1M_merged` contains all 100K individuals, but just 1188973 SNPs.
   These SNPs is a subset of 1190321 SNPs (matlab reference file for 1M template (w_hm3)
 
 In the code these "subsets" are refered to as "frames".
-Each frame has a specific number of SNPs and subjects genotyped subjects.
+Each frame has a specific number of SNPs and genotyped subjects.
 Within each frame we can store vectors of length "snps" or "subj", for example:
 
 * truebeta - true effect sizes generated for synthetic mixture
@@ -68,15 +68,10 @@ The `/projects/NS9114K/SYNGP/` folder is organized as follows:
 * `2558411_ref.bim` is a reference file containing 2558411 SNPs (also known as 2.5 million SNPs template).
 * Folder `EUR_10K_2M_merged/` contains plink genotypes for 10K individuals and 2518104 SNPs (subset of the 2.5M template)
   This genotypes were generated with HAPGEN2 tool using EUR population from 1000 genome phase 3 as reference
-* Folder `EUR_10K_2M_pheno/` contains pre-generated synthetic phenotypes. The naming scheme is like this
-
-   * `pi<N>_h<H>_iter<K>.mat`, where `N = 0..6` indicated that a fraction of `10^-N` SNPs are causals; `H = 0, 20, 50, 80` is heritability of the phenotype (in percentage); `K` is an iteration (each data is randomly generated several times)
-   * `pi<N>_h<H>_iter<K>_enrich10at4.mat` --- same as before, but with differential enrichment; this means that causal SNPs are randomly distributed across certain annotation cathegory
-
-  Each of these files will containing
-    * `betavec` --- true effect sizes (assigned according to the model described above)
-    * `logpvec` --- `-log10(pval)` where `pval` simulate GWAS results for given phenotype`
-    * `zvec` --- signed `z` score that corresponds to `logpvec`
-    * `p1`, `h2` --- true  proportion of causal SNPs and heritability
+* Folder `EUR_100K_80M_frames` contains pre-generated synthetic data calculated with `EUR_100K_80M` frame. Example:
+  * `truepheno_<ID>_pi1e-03.mat` --- true phenotypes calculated from the model where `0.1%` of SNPs were causal (non-zero effect size), and the remaining SNPs had  effect size set to zero. `ID` is a unique identifier of the run, used to differentiate multiple runs with the same parameter.
+  * `genofreq.mat` --- matrix of genotype frequencies for `EUR_100K_80M` frame.
+* Folder `EUR_100K_1M_frames` contains pre-generated synthetic data for `EUR_100K_1M` frame.
+  * `gwaslogp_<ID>_pi=1e-03_h2=0.90.mat` contains gwas results of the phenotypes. True phenotypes for this run were calculated using `EUR_100K_80M` frame, but GWAS results were conducted only using 1M snps.
 
 * `annotations_RData/` --- annotation cathegory in `R` format. This is not yet integrated with the rest of the code.
