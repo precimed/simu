@@ -8,16 +8,24 @@ function frame = make_truebeta_gmm(frame, config, varargin)
     addOptional(p, 'sig1vec', []);  % variance (first component)
     addOptional(p, 'sig2vec', []);  % variance (second component)
     addOptional(p, 'rhovec', []);   % correlation (between two components)
+    addOptional(p, 'mask', []);     % restrict heritability to certain SNPs
+                                    % mask can be either logical array of size "snps x 1"
+                                    % or an array of indices between 1 and snps.
     parse(p, varargin{:}); opts = p.Results;
 
+    mask = opts.mask;
     pivec = opts.pivec;
     sig1vec = opts.sig1vec;
     sig2vec = opts.sig2vec;
     rhovec = opts.rhovec;
 
     nsnp = frame.snps;
+    if isempty(mask), mask = 1:nsnp; end;
+    if islogical(mask), mask = find(mask); end;
+
     if nsnp <= 0, error('nsnp must be positive'); end;
-    if sum(floor(pivec * nsnp) > nsnp), error('sum of pivec must be less than 1'); end;
+    if sum(floor(pivec * nsnp)) > nsnp, error('sum of pivec must be less than 1'); end;
+    if sum(floor(pivec * nsnp)) > length(mask), error('sum of pivec is to large for given mask'); end;
     if length(unique([length(sig1vec), length(sig2vec), length(rhovec), length(pivec)])) > 1,
         error('pivec, sig1vec, sig2vec, rhovec must have the same length');
     end;
@@ -26,7 +34,7 @@ function frame = make_truebeta_gmm(frame, config, varargin)
     mix = zeros(nsnp, 1);
     num_mixtures = length(pivec);
 
-    idx = randperm(nsnp); idx_start = 1;
+    idx = mask(randperm(length(mask))); idx_start = 1;
     for i=1:num_mixtures
         mu = [0 0];
         sigma = [sig1vec(i), sqrt(sig1vec(i) * sig2vec(i)) * rhovec(i);
