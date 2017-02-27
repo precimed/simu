@@ -41,6 +41,7 @@ for hindex = 1:length(hvec_opts)
     frame = make_gwas     (frame, config);
     frame = make_gwaslogp (frame, config);
     frame = reframe       (frame, config, 'EUR_100K_1190K_ref');
+    frame.opts.now = datestr(now);
     save(sprintf('gwaslogp_%s_pi=%.0e_h2=%.2f%s.mat', filename, pivec, hvec_opts(hindex), differential_enrichment{di}), 'frame', '-v7.3');
 end
 
