@@ -7,22 +7,20 @@ fieldnames(config.frames)
 
 load(fullfile(norstore_path, 'SYNGP/misc/gencode_annomat_binary.mat'));
 
-differential_enrichment = { '_AllSNPs', '_Introns', '_NotIntrons', '_Exons', '_NotExons' };
+differential_enrichment = { '_AllSNPs', '_Introns', '_Exons' };
 
 hvec_opts =  [0.1, 0.3, 0.5, 0.7, 0.9];
 pivec_opts = [1e-6, 3e-6, 1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1];
 
-index = mod(index - 1, length(hvec_opts)) + 1;
+index = mod(index - 1, length(pivec_opts)) + 1;
 if index <= 0 || index > length(pivec_opts), error('invalid index'); end;
 pivec = pivec_opts(index);
 
-for di = 1:5
+for di = 1:3
 
 if di == 1, mask = []; end;
 if di == 2, mask = GENCODE_intron; end;
-if di == 3, mask = ~GENCODE_intron; end;
-if di == 4, mask = GENCODE_exon; end;
-if di == 5, mask = ~GENCODE_exon; end;
+if di == 3, mask = GENCODE_exon; end;
 
 frame = make_empty_frame (config, 'EUR_100K_80M_chunks');
 frame = make_truebeta_gmm(frame, config, 'pivec', pivec, 'sig1vec', 1.0, 'sig2vec', 1.0, 'rhovec', 0.0, 'mask', mask);
