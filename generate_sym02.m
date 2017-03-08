@@ -41,10 +41,12 @@ overlap_indices = {no_overlap, partial_overlap, full_overlap};
 
 frame0 = frame;
 for hindex = 1:length(hvec_opts)
-    frame = reframe       (frame0, config, 'EUR_100K_1188K_merged');
-    frame = make_phenotype(frame, config, 'h2', hvec_opts(hindex));
+    frame1 = reframe       (frame0, config, 'EUR_100K_1188K_merged');
+    frame1 = make_phenotype(frame1, config, 'h2', hvec_opts(hindex));
     for oindex = 1:length(overlap_options)
-        frame = make_gwas     (frame, config, 'subj_idx', overlap_indices{oindex});
+        % For each overlap option start from the same frame, e.g. frame1
+        % Remember that at the end we reframe it to another reference
+        frame = make_gwas     (frame1, config, 'subj_idx', overlap_indices{oindex});
         frame = make_gwaslogp (frame, config);
         frame = reframe       (frame, config, 'EUR_100K_1190K_ref');
         frame.opts.now = datestr(now);
