@@ -32,7 +32,7 @@ function frame = make_gwas(frame, config, varargin)
         for trait=1:ntraits
             observedPhenotype = frame.phenotype(opts.subj_idx{trait}, trait);
             [rhovec_tmp, pvec_tmp] = corr(X(opts.subj_idx{trait}, :), double(observedPhenotype));
-            if any(isnan(rhovec_tmp)) || any(isnan(pvec_tmp)), error('corr return nan\n'); end;
+            if all(isnan(rhovec_tmp)) || all(isnan(pvec_tmp)), error('corr return nan\n'); end;
             gwasbeta(i:e, trait) = rhovec_tmp;
             gwaspval(i:e, trait) = pvec_tmp;
         end
