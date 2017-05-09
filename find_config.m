@@ -37,6 +37,12 @@ config.frames.EUR_100K_80M_chunks.reader = @(subjvec, snpvec)chunked_frame_reade
 %config.frames.EUR_10K_2558K_ref.subj = 10000;
 %config.frames.EUR_10K_2558K_ref.snps = 2558411;
 %config.frames.EUR_10K_2558K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, 'SYNGP/2558411_ref'), true, '%s %s %f %d %s %s %s %s');
+%config.frames.EUR_10K_2558K_ref.bim = rmfield(config.frames.EUR_10K_2558K_ref.bim, {'chrvec', 'cMvec', 'bpvec', 'A1vec', 'A2vec'});
+
+config.frames.EUR_100K_2558K_ref.subj = 100000;
+config.frames.EUR_100K_2558K_ref.snps = 2558411;
+config.frames.EUR_100K_2558K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, 'SYNGP/2558411_ref'), true, '%s %s %f %d %s %s %s %s');
+config.frames.EUR_100K_2558K_ref.bim = rmfield(config.frames.EUR_100K_2558K_ref.bim, {'chrvec', 'cMvec', 'bpvec', 'A1vec', 'A2vec'});
 
 % A subset of 80M and 1M template (w_hm3) -- 10K subjects
 %config.frames.EUR_10K_1188K_merged.subj = 10000;

@@ -11,7 +11,7 @@ function frame = reframe(frame, config, framename)
         if length(oldcfg.bim.snplist) ~= frame.snps, error('Number of SNPs mismatch (in the old frame)'); end;
         if length(newcfg.bim.snplist) ~= newcfg.snps, error('Number of SNPs mismatch (in the new frame)'); end;
         [is_in_new_frame, index_to_new_frame] = ismember(oldcfg.bim.snplist, newcfg.bim.snplist);
-        if ~all(is_in_new_frame), error('Unable to map some SNPs to the new frame'); end;
+        if ~all(is_in_new_frame), warning('Unable to map %i SNPs to the new frame; %i SNPs mapped successfully', sum(~is_in_new_frame), sum(is_in_new_frame)); end;
         for i=1:length(fn)
             if size(frame.(fn{i}), 1) ~= frame.snps, continue; end;
             frame.(fn{i}) = align_to_ref(frame.(fn{i}), length(newcfg.bim.snplist), index_to_new_frame);
@@ -44,5 +44,5 @@ end
 function aligned_vec = align_to_ref(vec, nsnp_ref, index_to_ref)
     numtraits = size(vec, 2);
     aligned_vec = nan(nsnp_ref, numtraits);
-    aligned_vec(index_to_ref, :) = vec;
+    aligned_vec(index_to_ref(index_to_ref ~= 0), :) = vec(index_to_ref ~= 0, :);
 end
