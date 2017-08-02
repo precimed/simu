@@ -59,7 +59,7 @@ frame = make_truebeta_gmm(frame, config, 'pivec', pivec, 'sig1vec', sig1vec, 'si
 frame = make_truepheno   (frame, config, 'snpstep', 100);
 
 nsubj = frame.subj;
-subj_idx = {1:fix((nsubj+n12)/2), fix((nsubj-n12)/2):nsubj};
+subj_idx = {1:fix((nsubj+n12)/2), 1+fix((nsubj-n12)/2):nsubj};
 
 frame = reframe       (frame, config, frame_gwas);
 frame = make_phenotype(frame, config, 'h2', h2);
