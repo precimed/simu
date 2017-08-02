@@ -1,3 +1,43 @@
+# How to run MASSIM [instructions in progress]
+
+Massim allows you to generate synthetic GWAS data with realistic LD structure.
+To run it you need to download 100K genotypes, pre-generated with HapGen2 utility.
+These files are quite large, ca. 2 TB unpacked (yes, correct, ca. 2000 GB).
+The files are gzip compressed, download size is around 200 GB.
+Other options to run MASSIM with less data (e.g less SNPs and less subjects) are described further below.
+The instructions assume that you run MASSIM on Abel, but it can very well run on your machine if it has enough disk space.
+Currently MASSIM require you to have Matlab (it may work with Octave, but this is not tested).
+
+* Step 1. Download genotype data from NORSTORE project NS9114K, folder SYNGP
+```
+  mkdir /work/users/$USER/NORSTORE
+  rsync -avP --update $USER@login.norstore.uio.no:/projects/NS9114K/SYNGP /work/users/$USER/NORSTORE
+```
+
+* Step 2. Unpack genotype data
+```
+  mkdir /work/users
+  tar -xzvf /work/users/$USER/SYNGP/EUR_100K_9M.tar.gz -C /work/users/$USER/SYNGP/  
+```
+
+* Step 3. Clone MASSIM code
+```
+cd ~ && mkdir precimed && cd precimed
+git clone https://github.com/precimed/massim.git
+```
+
+* Step 4. Adjust `~/precimed/massim/find_config.m` file so that it finds all files on you machine. Test this by running 'find_config'.
+
+* Step 5. Use `~/precimed/massim/run.m` to run simulations. All available parameters described in `run.m` file.
+
+# How to run MASSIM - lightweight version
+
+To run MASSIMS with less download you may adjust step 1 from the above instructions:
+```
+
+```
+and limit your runs to `EUR_100K_1188K_merged` and `EUR_100K_1190K_ref` configs.
+
 # Synthetic genotypes and phenotypes
 
 SynGP is about generating synthetic data.
