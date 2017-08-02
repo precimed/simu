@@ -7,6 +7,9 @@
 % rho12     - genetic correlation within polygenic overlap; default: 0
 % n12       - number of overlaping subjects across GWASs
 %             limitation: must not exceed nsubj (frame parameter)
+% repeat    - how many traits to make with the same parameters
+%             each time different SNPs will be causal, and different noise
+%             applied to the phenotype
 %
 % Options that control which set of SNPs to use:
 % (you may need up update paths in find_config.m).
@@ -25,6 +28,7 @@ if ~exist('h2', 'var'), h2 = 0.5; end
 if ~exist('pi12', 'var'), pi12 = pi; end
 if ~exist('rho12', 'var'), rho12 = 0; end
 if ~exist('n12', 'var'), n12 = 0; end
+if ~exist('repeat', 'var'), repeat = 1; end
 if ~exist('frame_pheno', 'var'), frame_pheno = 'EUR_100K_80M_chunks'; end
 if ~exist('frame_gwas', 'var'), frame_gwas = 'EUR_100K_1188K_merged'; end
 if ~exist('frame_final', 'var'), frame_final = 'EUR_100K_1190K_ref'; end
@@ -49,6 +53,7 @@ pivec = [];sig1vec = [];sig2vec = [];rhovec = [];
 if pi1>0, pivec = [pivec pi1 pi1]; sig1vec = [sig1vec 1 0]; sig2vec = [sig2vec 0 1]; rhovec = [rhovec 0 0]; end;
 if pi12>0, pivec = [pivec pi12]; sig1vec = [sig1vec 1]; sig2vec = [sig2vec 1]; rhovec = [rhovec rho12]; end;
 
+for irepeat = 1:repeat
 frame = make_empty_frame (config, frame_pheno);
 frame = make_truebeta_gmm(frame, config, 'pivec', pivec, 'sig1vec', sig1vec, 'sig2vec', sig2vec, 'rhovec', rhovec);
 frame = make_truepheno   (frame, config, 'snpstep', 100);
@@ -65,3 +70,4 @@ frame.opts.now = datestr(now);
 
 [~,filename,~] = fileparts(tempname);
 save(sprintf('gwaslogp_h2=%.2f_pi=%.0e_pi12=%.0e_rho12=%.2f_n12=%i_%s.mat', h2, pi, pi12, rho12, fix(n12), filename), 'frame', '-v7.3');
+end
