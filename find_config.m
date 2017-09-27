@@ -8,7 +8,7 @@ config = struct();
 t = 'H:\NORSTORE';                       if exist(t, 'dir'), norstore_path = t; end;
 t = '/work/users/oleksanf/NORSTORE';     if exist(t, 'dir'), norstore_path = t; end;
 t = 'E:\EUR_100K_80M';                   if exist(t, 'dir'), EUR_100K_80M_path = t; end;
-t = '/work/users/oleksanf/EUR_100K_80M'; if exist(t, 'dir'), EUR_100K_80M_path = t; end;
+t = '/work/users/oleksanf/EUR_100K_80M_chunks'; if exist(t, 'dir'), EUR_100K_80M_path = t; end;
 t = 'E:\EUR_100K_9M_merged';                   if exist(t, 'dir'), EUR_100K_9M_merged_path = t; end;
 t = '/work/users/oleksanf/EUR_100K_9M_merged'; if exist(t, 'dir'), EUR_100K_9M_merged_path = t; end;
 snp_detail_path = fullfile(norstore_path, 'SYNGP/misc/snp_detail.mat');
@@ -67,17 +67,17 @@ config.frames.EUR_100K_1190K_ref.snps = 1190321;
 config.frames.EUR_100K_1190K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, 'SYNGP/1m_ref'), true, '%s %s %f %d %s %s %s %s');
 
 % A subset of 80M and 9M template
-config.frames.EUR_100K_8801K_merged.subj = 100000;
-config.frames.EUR_100K_8801K_merged.snps = 8801249;
-config.frames.EUR_100K_8801K_merged.reader = @(subjvec, snpvec)merged_frame_reader(subjvec, snpvec, 100000, fullfile(EUR_100K_9M_merged_path, 'all'));
-config.frames.EUR_100K_8801K_merged.bim = PlinkRead_bim(fullfile(EUR_100K_9M_merged_path, 'all'));
-config.frames.EUR_100K_8801K_merged.bim = rmfield(config.frames.EUR_100K_8801K_merged.bim, {'chrvec', 'cMvec', 'bpvec', 'A1vec', 'A2vec'});
+%config.frames.EUR_100K_8801K_merged.subj = 100000;
+%config.frames.EUR_100K_8801K_merged.snps = 8801249;
+%config.frames.EUR_100K_8801K_merged.reader = @(subjvec, snpvec)merged_frame_reader(subjvec, snpvec, 100000, fullfile(EUR_100K_9M_merged_path, 'all'));
+%config.frames.EUR_100K_8801K_merged.bim = PlinkRead_bim(fullfile(EUR_100K_9M_merged_path, 'all'));
+%config.frames.EUR_100K_8801K_merged.bim = rmfield(config.frames.EUR_100K_8801K_merged.bim, {'chrvec', 'cMvec', 'bpvec', 'A1vec', 'A2vec'});
 
 % Matlab 9M template
-config.frames.EUR_100K_9279K_ref.subj = 100000;
-config.frames.EUR_100K_9279K_ref.snps = 9279485;
-config.frames.EUR_100K_9279K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, 'SYNGP/9279485_ref'), true, '%s %s %f %d %s %s %s %s');
-config.frames.EUR_100K_9279K_ref.bim = rmfield(config.frames.EUR_100K_9279K_ref.bim, {'chrvec', 'cMvec', 'bpvec', 'A1vec', 'A2vec'});
+%config.frames.EUR_100K_9279K_ref.subj = 100000;
+%config.frames.EUR_100K_9279K_ref.snps = 9279485;
+%config.frames.EUR_100K_9279K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, 'SYNGP/9279485_ref'), true, '%s %s %f %d %s %s %s %s');
+%config.frames.EUR_100K_9279K_ref.bim = rmfield(config.frames.EUR_100K_9279K_ref.bim, {'chrvec', 'cMvec', 'bpvec', 'A1vec', 'A2vec'});
 
 fn = fieldnames(config.frames);
 for i=1:length(fn)
