@@ -6,7 +6,7 @@
 % subjoverlap - 'zero', 'partial', 'full'
 %
 % example:
-% pi1u=1e-5; pi2u=1e-4; pi12=1e-6; h2=0.5; gencorr=0.6; subjoverlap='zero';
+% pi1u=1e-5; pi2u=1e-4; pi12=1e-6; h2=0.5; gencorr=0.6; subjoverlap='zero'; filename_id='QRDKXL'
 rng('shuffle')
 
 pi1 = pi1u - pi12;
@@ -62,9 +62,6 @@ if (pi12 > 0) pivec = [pivec pi12]; sig1vec = [sig1vec 1]; sig2vec = [sig2vec 1]
 
 frame = make_truebeta_gmm(frame, config, 'pivec', pivec, 'sig1vec', sig1vec, 'sig2vec', sig2vec, 'rhovec', rhovec);
 frame = make_truepheno   (frame, config, 'snpstep', 100);
-
-[~,filename_id,~] = fileparts(tempname);
-filename_id(filename_id=='_') = 'X';
 
 frame = make_phenotype(frame, config, 'h2', h2);
 frame = make_gwas     (frame, config, 'subj_idx', overlap);
