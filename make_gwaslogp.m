@@ -8,7 +8,7 @@ function frame = make_gwaslogp(frame, config, varargin)
     gwaslogp(isinf(gwaslogp)) = -log10(realmin);
     gwaszscore = -norminv(10.^-gwaslogp/2).*sign(frame.gwasbeta);
 
-    frame.gwaslogp = gwaslogp;
-    frame.gwaszscore = gwaszscore;
+    frame.logpvec = gwaslogp;
+    frame.zvec = gwaszscore;
     frame.opts.make_gwaslogp = opts;
 end

@@ -41,7 +41,7 @@ function frame = make_gwas(frame, config, varargin)
 
     frame.gwasbeta = gwasbeta;
     frame.gwaspval = gwaspval;
-    frame.gwassize = zeros(size(gwaspval)); for trait=1:ntraits, frame.gwassize(:, trait) = ones(frame.snps, 1) * length(opts.subj_idx{trait}); end
+    frame.nvec = zeros(size(gwaspval)); for trait=1:ntraits, frame.gwassize(:, trait) = ones(frame.snps, 1) * length(opts.subj_idx{trait}); end
     frame.opts.make_gwas = opts;
 end
 

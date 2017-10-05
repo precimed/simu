@@ -1,6 +1,7 @@
 function frame = reframe(frame, config, framename)
     % REFRAME changes frame and align matrices to the new set of SNPs.
-
+    
+    fprintf('reframe %s to %s...\n', frame.name, framename);
     oldcfg = config.frames.(frame.name);
     newcfg = config.frames.(framename);
     fn = fieldnames(frame);
@@ -31,14 +32,15 @@ function frame = reframe(frame, config, framename)
     % Removing fields that will not match new frame
     to_be_removed = {};
     for i=1:length(fn)
-        if size(frame.(fn{i}), 1) == frame.subj && oldcfg.subj ~= newcfg.subj, frame = rmfield(frame, fn{i}); to_be_removed{end+1} = fn{i}; end;
-        if size(frame.(fn{i}), 1) == frame.snps && oldcfg.snps ~= newcfg.snps, frame = rmfield(frame, fn{i}); to_be_removed{end+1} = fn{i}; end;
+        if size(frame.(fn{i}), 1) == frame.subj && oldcfg.subj ~= newcfg.subj, frame.legacy.(fn{i}) = frame.(fn{i}); frame = rmfield(frame, fn{i}); to_be_removed{end+1} = fn{i}; end;
+        if size(frame.(fn{i}), 1) == frame.snps && oldcfg.snps ~= newcfg.snps, frame.legacy.(fn{i}) = frame.(fn{i}); frame = rmfield(frame, fn{i}); to_be_removed{end+1} = fn{i}; end;
     end
-    if ~isempty(to_be_removed), warning('reframe is removing fields: %s\n', sprintf('%s ', to_be_removed{:})); end;
+    if ~isempty(to_be_removed), warning('fields %s are moved to legacy\n', sprintf('%s ', to_be_removed{:})); end;
 
     frame.snps = newcfg.snps;
     frame.subj = newcfg.subj;
     frame.name = framename;
+    frame.opts.reframe_time = datestr(now);
 end
 
 function aligned_vec = align_to_ref(vec, nsnp_ref, index_to_ref)
