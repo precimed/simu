@@ -7,8 +7,7 @@
 %
 % example:
 % pi1u=1e-5; pi2u=1e-4; pi12=1e-6; h2=0.5; gencorr=0.6; subjoverlap='zero';
-% filename_id='QRDKXL';
-rng('shuffle')
+% filename_id={'QRDKXL'; 'ASCPL'};
 
 pi1 = pi1u - pi12;
 pi2 = pi2u - pi12;
@@ -45,6 +44,9 @@ if ~exist('config', 'var')
 end
 fieldnames(config.frames)
 
+for repeat_index = 1:length(filename_id)
+rng('shuffle')
+
 frame = make_empty_frame (config, 'EUR_100K_8801K_merged');
 
 nsubj = frame.subj;
@@ -72,6 +74,8 @@ templates = {'EUR_100K_9279K_ref', 'EUR_100K_1190K_ref'};
 template_short_name  = {'9M', '1M'};
 for it = 1:length(templates)
     frame1 = reframe(frame, config, templates{it});
-    filename = sprintf('template=%s_pi1u=%.0e_pi2u=%.0e_pi12=%.0e_gencorr=%.2f_h2=%.2f_subjoverlap=%s_id=%s.mat', template_short_name{it}, pi1u, pi2u, pi12, gencorr, h2, subjoverlap, filename_id);
+    filename = sprintf('template=%s_pi1u=%.0e_pi2u=%.0e_pi12=%.0e_gencorr=%.2f_h2=%.2f_subjoverlap=%s_id=%s.mat', template_short_name{it}, pi1u, pi2u, pi12, gencorr, h2, subjoverlap, filename_id{repeat_index});
     save(filename, '-struct', 'frame1', 'truebeta', 'mixture', 'truepheno', 'phenotype', 'gwasbeta', 'gwaspval', 'nvec', 'logpvec', 'zvec', '-v7.3');
+end
+
 end
