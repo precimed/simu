@@ -6,7 +6,8 @@
 % subjoverlap - 'zero', 'partial', 'full'
 %
 % example:
-% pi1u=1e-5; pi2u=1e-4; pi12=1e-6; h2=0.5; gencorr=0.6; subjoverlap='zero'; filename_id='QRDKXL'
+% pi1u=1e-5; pi2u=1e-4; pi12=1e-6; h2=0.5; gencorr=0.6; subjoverlap='zero';
+% filename_id='QRDKXL';
 rng('shuffle')
 
 pi1 = pi1u - pi12;
@@ -19,8 +20,8 @@ if (h2 < 0 || h2 > 1), error('error in h2'); end;
 if (gencorr < -1 || gencorr > 1), error('error in gencorr'); end;
 
 if ~exist('config', 'var')
-    t = 'H:\NORSTORE';                       if exist(t, 'dir'), norstore_path = t; end;
-    t = '/work/users/oleksanf/NORSTORE';     if exist(t, 'dir'), norstore_path = t; end;
+    t = 'H:\NORSTORE\SYNGP';                       if exist(t, 'dir'), norstore_path = t; end;
+    t = '/usit/abel/u1/oleksanf';                  if exist(t, 'dir'), norstore_path = t; end;
     t = 'E:\EUR_100K_9M_merged';                   if exist(t, 'dir'), EUR_100K_9M_merged_path = t; end;
     t = '/work/users/oleksanf/EUR_100K_9M_merged'; if exist(t, 'dir'), EUR_100K_9M_merged_path = t; end;
 
@@ -34,13 +35,13 @@ if ~exist('config', 'var')
     % Matlab 9M template
     config.frames.EUR_100K_9279K_ref.subj = 100000;
     config.frames.EUR_100K_9279K_ref.snps = 9279485;
-    config.frames.EUR_100K_9279K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, 'SYNGP/9279485_ref'), true, '%s %s %f %d %s %s %s %s');
+    config.frames.EUR_100K_9279K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, '9279485_ref'), true, '%s %s %f %d %s %s %s %s');
     config.frames.EUR_100K_9279K_ref.bim = rmfield(config.frames.EUR_100K_9279K_ref.bim, {'chrvec', 'cMvec', 'bpvec', 'A1vec', 'A2vec'});
 
     % Matlab 1M reference template (w_hm3)
     config.frames.EUR_100K_1190K_ref.subj = 100000;
     config.frames.EUR_100K_1190K_ref.snps = 1190321;
-    config.frames.EUR_100K_1190K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, 'SYNGP/1m_ref'), true, '%s %s %f %d %s %s %s %s');
+    config.frames.EUR_100K_1190K_ref.bim  = PlinkRead_bim(fullfile(norstore_path, '1m_ref'), true, '%s %s %f %d %s %s %s %s');
 end
 fieldnames(config.frames)
 
