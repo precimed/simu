@@ -52,6 +52,7 @@ frame = make_empty_frame (config, 'EUR_100K_8801K_merged');
 nsubj = frame.subj;
 s500 = floor(nsubj/2); s501 = s500+1; s1000 = nsubj;
 s333 = floor(nsubj/3); s334 = s333+1; s667 = 2*s333+1;
+overlap=[];
 overlap.zero = {1:s500, s501:s1000}; % zero overlap
 overlap.partial = {1:s667, s334:s1000}; % partial overlap
 overlap.full = {1:s1000, 1:s1000};   % full overlap
