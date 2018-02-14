@@ -9,6 +9,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 namespace po = boost::program_options;
 
 #include <plinkio/plinkio.h>
@@ -38,6 +39,9 @@ struct SimuOptions {
   // derived options
   std::vector<std::string> bfiles;
   int num_samples;
+  std::string out_pheno;
+  std::string out_log;
+  std::vector<std::string> out_causals;
 
   SimuOptions() {
     num_samples = -1;
@@ -101,13 +105,35 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm,
   if (!simu_options.cc && !simu_options.qt)
     throw std::invalid_argument(std::string("Either --qt or --cc must be specified"));
 
+  // validate number of traits
+  if (simu_options.num_traits <= 0 || simu_options.num_traits >= 3)
+    throw std::invalid_argument(std::string("--num-traits must be either 1 or 2"));
+
+  // validate number of components
+  if (simu_options.num_components <= 0)
+    throw std::invalid_argument(std::string("--num-components must be non-negative number"));
+
+  // Validate --out options
+  if (simu_options.out.empty())
+    throw std::invalid_argument(std::string("--out option must be specific"));
+  simu_options.out_pheno = simu_options.out + ".pheno";
+  simu_options.out_log = simu_options.out + ".log";
+  for (int i = 0; i < simu_options.num_traits; i++)
+    simu_options.out_causals.push_back(simu_options.out + "." + boost::lexical_cast<std::string>(i) + ".causals");
+
+  if ( boost::filesystem::exists( simu_options.out_pheno ) )
+  {
+    std::cout << "WARNING: Target file " << simu_options.out_pheno << " already exists and will be overwritten\n"; 
+  }
+
   if (simu_options.qt && (vm.count("k") > 0 || vm.count("ncas") > 0 || vm.count("ncon") > 0))
     std::cout << "WARNING: Options --k, --ncas, --ncon are not relevant to --qt, and will be ignored\n";
+  if ((simu_options.num_traits==1) && (vm.count("trait2-sigsq") > 0))
+    std::cout << "WARNING: Option --trait2-sigsq is not relevant for a single-trait simulations, and will be ignored\n";
+
   if (simu_options.cc && (simu_options.ncas.empty() != simu_options.ncon.empty()))
     throw std::invalid_argument("Options --ncas and --ncon must be either both present, or both absent");
 
-  if (simu_options.num_traits <= 0 || simu_options.num_traits >= 3)
-    throw std::invalid_argument(std::string("--num-traits must be either 1 or 2"));
   if (simu_options.cc) {
     if (!simu_options.k.empty() && (simu_options.k.size() != simu_options.num_traits))
       throw std::invalid_argument(std::string("Number of --k values does not match the number of traits"));
@@ -131,10 +157,6 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm,
   for (auto val: simu_options.hsq) if (val <= 0 || val >= 1)
     throw std::invalid_argument(std::string("Heritability --hsq must be between 0.0 and 1.0"));
 
-  // validate number of components
-  if (simu_options.num_components <= 0)
-    throw std::invalid_argument(std::string("--num-components must be non-negative number"));
-
   // initialize default value for --causal-pi and check for out of range values
   if (!simu_options.causal_pi.empty() && (simu_options.causal_pi.size() != simu_options.num_components))
     throw std::invalid_argument(std::string("Number of --causal-pi values does not match the number of components"));
@@ -155,7 +177,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm,
   }
 
   // initialize default value for --trait2-sigsq and check for out of range values
-  {
+  if (simu_options.num_traits >= 2) {
     auto& target = simu_options.trait2_sigsq;
     if (!target.empty() && (target.size() != simu_options.num_components))
       throw std::invalid_argument(std::string("Number of --trait2-sigsq values does not match the number of components"));
@@ -228,7 +250,7 @@ main(int argc, char *argv[])
       ("ncas", po::value< std::vector<int> >(&simu_options.ncas)->multitoken(), "number of cases, by default N*k; one value per trait")
       ("ncon", po::value< std::vector<int> >(&simu_options.ncon)->multitoken(), "number of controls, by default N*(1-k); one value per trait")
       ("hsq", po::value< std::vector<float> >(&simu_options.hsq)->multitoken(), "heritability, by default 0.7; one value per trait")
-      ("num-components", po::value(&simu_options.num_components)->default_value(1), "Number of components")      
+      ("num-components", po::value(&simu_options.num_components)->default_value(1), "Number of components in the mixture")      
       ("causal-pi", po::value< std::vector<float> >(&simu_options.causal_pi)->multitoken(), "proportion of causal variants; by default 0.001; one value per mixture component")
       ("trait1-sigsq", po::value< std::vector<float> >(&simu_options.trait1_sigsq)->multitoken(), "variance of effect sizes for trait1 per causal marker; by default 1.0; one value per mixture component")
       ("trait2-sigsq", po::value< std::vector<float> >(&simu_options.trait2_sigsq)->multitoken(), "variance of effect sizes for trait2 per causal marker; by default 1.0; one value per mixture component")
