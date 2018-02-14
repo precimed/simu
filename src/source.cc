@@ -13,6 +13,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
+#include <boost/random/normal_distribution.hpp>
 #include <boost/random/variate_generator.hpp>
 #include "boost/date_time/posix_time/posix_time.hpp"
 #include <boost/lexical_cast.hpp>
@@ -309,6 +310,47 @@ void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, std::vec
   }
 }
 
+void find_effect_sizes(const SimuOptions& simu_options, boost::mt19937& rng,
+                       const std::vector<int>& component_per_variant,
+                       std::vector<double>* effect1_per_variant) {
+  // generate vector of effect sizes (for trait1) for each variant
+  effect1_per_variant->clear();
+  for (int i = 0; i < simu_options.num_variants; i++) effect1_per_variant->push_back(0.0);
+
+  boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > random_normal(rng, boost::normal_distribution<>());
+
+  for (int i = 0; i < simu_options.num_variants; i++) {
+    if (component_per_variant[i] == -1) continue;
+    double sigma = sqrt(simu_options.trait1_sigsq[component_per_variant[i]]);
+    effect1_per_variant->at(i) = sigma * random_normal();
+  }
+}
+
+void find_effect_sizes_bivariate(const SimuOptions& simu_options, boost::mt19937& rng,
+                                 const std::vector<int>& component_per_variant,
+                                 std::vector<double>* effect1_per_variant,
+                                 std::vector<double>* effect2_per_variant) {
+  // generate vector of effect sizes (for trait1 and trait2) for each variant
+  effect1_per_variant->clear(); effect2_per_variant->clear();
+  for (int i = 0; i < simu_options.num_variants; i++) {
+    effect1_per_variant->push_back(0.0);
+    effect2_per_variant->push_back(0.0);
+  }
+
+  boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > random_normal(rng, boost::normal_distribution<>());
+
+  // https://www2.stat.duke.edu/courses/Spring12/sta104.1/Lectures/Lec22.pdf
+  for (int i = 0; i < simu_options.num_variants; i++) {
+    if (component_per_variant[i] == -1) continue;
+    double sigma1 = sqrt(simu_options.trait1_sigsq[component_per_variant[i]]);
+    double sigma2 = sqrt(simu_options.trait2_sigsq[component_per_variant[i]]);
+    double rg = simu_options.rg[component_per_variant[i]];
+    double x1 = random_normal(); double x2 = random_normal();
+    effect1_per_variant->at(i) = sigma1 * x1;
+    effect2_per_variant->at(i) = sigma2 * (rg * x1 + sqrt(1-rg*rg) * x2);
+  }
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -363,6 +405,15 @@ main(int argc, char *argv[])
       // Find component for causal variants
       std::vector<int> component_per_variant;
       find_causals(simu_options, rng, &component_per_variant);
+
+      // Find effect sizes for causla variants (one per trait)
+      std::vector<double> effect1_per_variant, effect2_per_variant;
+      if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
+      else find_effect_sizes_bivariate(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);
+  
+      // for (int i = 0; i < 10; i++) {if (i >= component_per_variant.size()) break; std::cout << component_per_variant[i] << " "; }; std::cout << "\n";
+      // for (int i = 0; i < 10; i++) {if (i >= effect1_per_variant.size()) break; std::cout << effect1_per_variant[i] << " "; }; std::cout << "\n";
+      // for (int i = 0; i < 10; i++) {if (i >= effect2_per_variant.size()) break; std::cout << effect2_per_variant[i] << " "; }; std::cout << "\n";
 
       // TBD - implement the logic
     } catch(std::exception& e) {
