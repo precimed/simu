@@ -1,3 +1,5 @@
+include_directories( ${PROJECT_SOURCE_DIR}/libplinkio/src )
+
 set(SRC_LIST
 	source.cc
 )
