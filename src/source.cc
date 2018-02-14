@@ -33,15 +33,15 @@ struct SimuOptions {
   std::vector<int> ncon;
   std::vector<float> hsq;
   int num_components;
-  std::vector<std::string> causal_variants;
-  std::vector<int> causal_n;
+  std::vector<std::string> causal_variants;  // not implemented (file with causal variants per component)
+  std::vector<int> causal_n;                 // not implemented
   std::vector<float> causal_pi;
-  std::vector<std::string> causal_regions;
+  std::vector<std::string> causal_regions;   // not implemented (file which restrict where causal variants may be distributed)
   std::vector<float> trait1_sigsq;
   std::vector<float> trait2_sigsq;
   std::vector<float> rg;
-  bool gcta_sigma;
-  std::string keep;
+  bool gcta_sigma;                           // not implemented (support gcta mode with effect sizes inversely proportional to maf)
+  std::string keep;                          // not implemented
   std::string out;
   boost::int64_t seed;
 
