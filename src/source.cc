@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -10,6 +11,10 @@
 #include <fstream>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_int.hpp>
+#include <boost/random/variate_generator.hpp>
+#include "boost/date_time/posix_time/posix_time.hpp"
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -38,15 +43,20 @@ struct SimuOptions {
   bool gcta_sigma;
   std::string keep;
   std::string out;
+  boost::int64_t seed;
 
   // derived options
   std::vector<std::string> bfiles;
   int num_samples;
+  int num_variants;
   std::string out_pheno;
   std::vector<std::string> out_causals;
 
   SimuOptions() {
     num_samples = -1;
+    num_variants = 0;
+    boost::posix_time::ptime const time_epoch(boost::gregorian::date(1970, 1, 1));
+    seed = (boost::posix_time::microsec_clock::local_time() - time_epoch).ticks();
   }
 };
 
@@ -110,7 +120,7 @@ class PioFile {
 
   int row_size() const { return row_size_; }
   int num_samples() const { return num_samples_; }
-  int num_loci() const { return num_loci_; }
+  int num_loci() const { return num_loci_; }  // I use "loci" here to be consistent with plinkio terminology, but everywhere else it goes as "variants"
 
   ~PioFile() {
     pio_close( &plink_file_ );
@@ -245,6 +255,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     if (simu_options.num_samples < 0) simu_options.num_samples = pio_files->back()->num_samples();
     if (simu_options.num_samples != pio_files->back()->num_samples())
       throw std::runtime_error("ERROR: Inconsistent number of subjects in --bfile-chr input");
+    simu_options.num_variants += pio_files->back()->num_loci();
   }
 
   // Initialize or validate ncas/ncon parameters
@@ -262,6 +273,38 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
         throw std::invalid_argument(std::string("ERROR: --ncas out of range, must be 0 to k*N, where k is prevalence"));
       if ((simu_options.ncon[i] <= 0) || (simu_options.ncon[i] > max_con))
         throw std::invalid_argument(std::string("ERROR: --ncon out of range, must be 0 to (1-k)*N, where k is prevalence"));
+    }
+  }
+
+  int num_causal_variants = 0;
+  for (int i = 0; i < simu_options.num_components; i++) num_causal_variants += static_cast<int>(simu_options.causal_pi[i] * simu_options.num_variants);
+  if (num_causal_variants > simu_options.num_variants)
+    throw std::invalid_argument("ERROR: sum of --causal-pi must be less than 1.0");
+
+  if (vm.count("seed") == 0)
+    log << "--seed option was set to " << simu_options.seed << "\n";
+}
+
+void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, std::vector<int>* component_per_variant) {
+  // generate vector of length simu_options.num_varinats
+  // elements in the vector can be
+  //    -1 means "not causal in either component", or 
+  //    0..(num_components-1) gives index of causal component
+
+  component_per_variant->clear();  
+  for (int i = 0; i < simu_options.num_variants; i++) component_per_variant->push_back(-1);
+
+  std::vector<int> variant_indices_permutation;
+  for (int i = 0; i < simu_options.num_variants; i++) variant_indices_permutation.push_back(i);
+  
+  boost::variate_generator<boost::mt19937&, boost::uniform_int<> > random_integer(rng, boost::uniform_int<>());
+  std::random_shuffle(variant_indices_permutation.begin(), variant_indices_permutation.end(), random_integer);
+
+  int permuted_index = 0;
+  for (int component_index = 0; component_index < simu_options.num_components; component_index++) {
+    int num_causals_per_component = static_cast<int>(simu_options.causal_pi[component_index] * simu_options.num_variants);
+    for (int causal_index = 0; causal_index < num_causals_per_component; causal_index++, permuted_index++) {
+      component_per_variant->at(variant_indices_permutation[permuted_index]) = component_index;
     }
   }
 }
@@ -293,6 +336,7 @@ main(int argc, char *argv[])
       ("trait2-sigsq", po::value< std::vector<float> >(&simu_options.trait2_sigsq)->multitoken(), "variance of effect sizes for trait2 per causal marker; by default 1.0; one value per mixture component")
       ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "coefficient of genetic correlation; by default 0.0; one value per mixture component")
       ("out", po::value(&simu_options.out)->default_value("simu"), "Prefix of the output file; will generate .pheno file (phenotypes) and .1.causals file (one per trait, list MarkerName for all causal variants and their effect sizes.")
+      ("seed", po::value(&simu_options.seed), "Seed for random numbers generator (default is time-dependent seed)")
     ;
 
     po::variables_map vm;
@@ -312,6 +356,13 @@ main(int argc, char *argv[])
       // fix_and_validate needs to read input bfiles as it needs to know num_samples
       std::vector<std::shared_ptr<PioFile>> pio_files;
       fix_and_validate(simu_options, vm, log, &pio_files);
+
+      // Generator of random numbers
+      boost::mt19937 rng(simu_options.seed);
+  
+      // Find component for causal variants
+      std::vector<int> component_per_variant;
+      find_causals(simu_options, rng, &component_per_variant);
 
       // TBD - implement the logic
     } catch(std::exception& e) {
