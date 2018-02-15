@@ -164,6 +164,10 @@ class PioFile {
     return retval;
   }
 
+  void reset_row() {
+    pio_reset_row(&plink_file_);
+  }
+
   int row_size() const { return row_size_; }
   int num_samples() const { return num_samples_; }
   int num_loci() const { return num_loci_; }  // I use "loci" here to be consistent with plinkio terminology, but everywhere else it goes as "variants"
@@ -211,6 +215,12 @@ class PioFiles {
        
       cur_file_++;
     }
+  }
+
+  void reset_row() {
+    for (int i = 0; i < pio_files_.size(); i++)
+      pio_files_[i]->reset_row();
+    cur_file_ = 0;
   }
 
  private:
@@ -376,8 +386,8 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
   if (num_causal_variants > simu_options.num_variants)
     throw std::invalid_argument("ERROR: sum of --causal-pi must be less than 1.0");
 
-  if (vm.count("seed") == 0)
-    log << "--seed option was set to " << simu_options.seed << "\n";
+  // if (vm.count("seed") == 0)
+  //  log << "--seed option was set to " << simu_options.seed << "\n";
 }
 
 void describe_simu_options(SimuOptions& s, Logger& log) {
@@ -404,6 +414,7 @@ void describe_simu_options(SimuOptions& s, Logger& log) {
   if (s.verbose) log << "\t--verbose \\\n";
   if (s.gcta_sigma) log << "\t--gcta-sigma \\\n";
   if (!s.keep.empty()) log << "\t--keep " << s.keep << " \\\n";
+  log << "\n";
 }
 
 void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, std::vector<int>* component_per_variant) {
@@ -457,8 +468,8 @@ void find_freq(const SimuOptions& simu_options,
     }
 
     int genocount[4] = {0, 0, 0, 0};   // 0 = AA, 1 = Aa, 2 = aa, 3 = missing
-    for (int i = 0; i < simu_options.num_samples; i++) {
-      genocount[(int)buffer[i]]++;
+    for (int sample_index = 0; sample_index < simu_options.num_samples; sample_index++) {
+      genocount[(int)buffer[sample_index]]++;
     }
 
     int genocount_non_missing = genocount[2] + genocount[1] + genocount[0];
@@ -470,6 +481,8 @@ void find_freq(const SimuOptions& simu_options,
     std::stringstream ss; ss << "ERROR: expect to find " << simu_options.num_variants << " variants across input files; more variants found. Are input Plink files corrupted?";
     throw std::runtime_error(ss.str());
   }
+
+  pio_files->reset_row();
 }
 
 void find_effect_sizes(const SimuOptions& simu_options, boost::mt19937& rng,
@@ -511,6 +524,63 @@ void find_effect_sizes_bivariate(const SimuOptions& simu_options, boost::mt19937
     effect1_per_variant->at(i) = sigma1 * x1;
     effect2_per_variant->at(i) = sigma2 * (rg * x1 + sqrt(1-rg*rg) * x2);
   }
+}
+
+void find_pheno(const SimuOptions& simu_options, 
+                const std::vector<int>& component_per_variant,
+                const std::vector<double>& freq_vec,
+                const std::vector<double>& effect1_per_variant,
+                const std::vector<double>& effect2_per_variant,
+                PioFiles* pio_files, 
+                std::vector<double>* pheno1_per_sample,
+                std::vector<double>* pheno2_per_sample) {
+  const bool bivariate = (simu_options.num_traits == 2);
+  std::vector<snp_t> buffer;
+
+  pheno1_per_sample->clear(); pheno2_per_sample->clear();
+  for (int sample_index = 0; sample_index < simu_options.num_samples; sample_index++) {
+    pheno1_per_sample->push_back(0);
+    if (bivariate) pheno2_per_sample->push_back(0);
+  }
+
+  for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
+    if (component_per_variant[variant_index] == -1) {
+      // skip variant because we are not interested
+      pio_status_t retval = pio_files->skip_row();
+      if (retval == PIO_END) {
+        std::stringstream ss; ss << "ERROR: expect to find " << simu_options.num_variants << " variants across input files; found only " << variant_index << ". Are input Plink files corrupted?";
+        throw std::runtime_error(ss.str());
+      }
+
+      continue;
+    }
+
+    pio_status_t retval = pio_files->next_row(&buffer);
+    if (retval == PIO_END) {
+      std::stringstream ss; ss << "ERROR: expect to find " << simu_options.num_variants << " variants across input files; found only " << variant_index << ". Are input Plink files corrupted?";
+      throw std::runtime_error(ss.str());
+    }
+
+    double averag_A1_copies = 2 * freq_vec[variant_index]; 
+    for (int sample_index = 0; sample_index < simu_options.num_samples; sample_index++) {
+      // missing value have 0 contribution to phenotype.
+      // This is because best we can do is to replace missing value with "2x(allele frequency)" (e.i. averag_A1_copies),
+      // which cancels out because we center by "2x(allele frequency)".
+      if (buffer[sample_index] == 3) continue;
+      double num_of_A1_copies = static_cast<double>(2 - buffer[sample_index]);
+
+      pheno1_per_sample->at(sample_index) += (num_of_A1_copies - averag_A1_copies) * effect1_per_variant[variant_index];
+      if (bivariate) pheno2_per_sample->at(sample_index) += (num_of_A1_copies - averag_A1_copies) * effect2_per_variant[variant_index];
+    }
+  }
+
+  // sanity-check -- now we should have reached end of the stream
+  if (pio_files->skip_row() != PIO_END) {
+    std::stringstream ss; ss << "ERROR: expect to find " << simu_options.num_variants << " variants across input files; more variants found. Are input Plink files corrupted?";
+    throw std::runtime_error(ss.str());
+  }
+
+  pio_files->reset_row();
 }
 
 int
@@ -564,9 +634,7 @@ main(int argc, char *argv[])
       // fix_and_validate needs to read input bfiles as it needs to know num_samples
       PioFiles pio_files;
       fix_and_validate(simu_options, vm, log, &pio_files);
-
-      if (simu_options.verbose)
-        describe_simu_options(simu_options, log);
+      describe_simu_options(simu_options, log);
 
       // Generator of random numbers
       boost::mt19937 rng(simu_options.seed);
@@ -575,22 +643,43 @@ main(int argc, char *argv[])
       std::vector<int> component_per_variant;
       find_causals(simu_options, rng, &component_per_variant);
 
+      log << "Calculate allele frequencies for causal markers only... \n";
       std::vector<double> freq_vec;  // vector of allele frequency; NB! vector has -1 for non-causal variants, as we don't need them anywhere later;
       find_freq(simu_options, component_per_variant, &pio_files, &freq_vec);
 
-      // Find effect sizes for causla variants (one per trait)
+      // Find effect sizes for causal variants (one per trait)
       std::vector<double> effect1_per_variant, effect2_per_variant;
       if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
       else find_effect_sizes_bivariate(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);
   
-      if (0) {  // debug printing
-        for (int i = 0; i < 10; i++) {if (i >= component_per_variant.size()) break; std::cout << component_per_variant[i] << " "; }; std::cout << "\n";
-        for (int i = 0; i < 10; i++) {if (i >= freq_vec.size()) break; std::cout << freq_vec[i] << " "; }; std::cout << "\n";
-        for (int i = 0; i < 10; i++) {if (i >= effect1_per_variant.size()) break; std::cout << effect1_per_variant[i] << " "; }; std::cout << "\n";
-        for (int i = 0; i < 10; i++) {if (i >= effect2_per_variant.size()) break; std::cout << effect2_per_variant[i] << " "; }; std::cout << "\n";
+      log << "Calculate phenotypes... \n";
+      // Find phenotypes
+      std::vector<double> pheno1_per_sample, pheno2_per_sample;
+      find_pheno(simu_options, component_per_variant, freq_vec, effect1_per_variant, effect2_per_variant,
+                 &pio_files, &pheno1_per_sample, &pheno2_per_sample);
+
+      // Apply heritability
+      // TBD
+
+      // Apply liability threshold model
+      // TBD
+
+      // Save phenotypes to output files
+      // TBD
+
+      // Save causals to output files
+      // TBD
+
+      if (simu_options.verbose) {  // debug printing
+        log << "[VERBOSE] First 10 elements in resulting files:\n";
+        log << "[VERBOSE]\t"; for (int i = 0; i < 10; i++) {if (i >= component_per_variant.size()) break; log << component_per_variant[i] << " "; }; log << "<- component\n";
+        log << "[VERBOSE]\t"; for (int i = 0; i < 10; i++) {if (i >= freq_vec.size()) break; log << freq_vec[i] << " "; }; log << "<- freq(a1)\n";
+        log << "[VERBOSE]\t"; for (int i = 0; i < 10; i++) {if (i >= effect1_per_variant.size()) break; log << effect1_per_variant[i] << " "; }; log << "<- effect1\n";
+        log << "[VERBOSE]\t"; for (int i = 0; i < 10; i++) {if (i >= effect2_per_variant.size()) break; log << effect2_per_variant[i] << " "; }; log << "<- effect2\n";
+        log << "[VERBOSE]\t"; for (int i = 0; i < 10; i++) {if (i >= pheno1_per_sample.size()) break; log << pheno1_per_sample[i] << " "; }; log << "<- pheno1\n";
+        log << "[VERBOSE]\t"; for (int i = 0; i < 10; i++) {if (i >= pheno2_per_sample.size()) break; log << pheno2_per_sample[i] << " "; }; log << "<- pheno2\n";
       }
 
-      // TBD - implement the logic
       auto analysis_finished = boost::posix_time::second_clock::local_time();
       log << "Analysis finished: " << analysis_finished << "\n";
       log << "Elapsed time: " << analysis_finished - analysis_started << "\n";
