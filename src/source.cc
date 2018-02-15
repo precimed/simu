@@ -144,6 +144,7 @@ class PioFile {
 
     num_samples_ = pio_num_samples( &plink_file_ );
     num_loci_ = pio_num_loci( &plink_file_ );
+    cur_locus_ = 0;
   }
 
   pio_status_t skip_row() { 
@@ -152,6 +153,7 @@ class PioFile {
       std::stringstream ss; ss << "ERROR: Error reading from " << bfile_;
       throw std::runtime_error(ss.str());
     }
+    cur_locus_++;
     return retval;
   }
 
@@ -162,15 +164,26 @@ class PioFile {
       std::stringstream ss; ss << "ERROR: Error reading from " << bfile_;
       throw std::runtime_error(ss.str());
     }
+    cur_locus_++;
     return retval;
   }
 
   void reset_row() {
     pio_reset_row(&plink_file_);
+    cur_locus_ = 0;
   }
 
   pio_sample_t* get_sample(size_t sample_id) {
     return pio_get_sample(&plink_file_, sample_id);
+  }
+
+  pio_locus_t* get_locus(size_t locus_id) {
+    return pio_get_locus(&plink_file_, locus_id);
+  }
+
+  // return loci that will be read by the next call to next_row
+  pio_locus_t* get_cur_locus() {
+    return pio_get_locus(&plink_file_, cur_locus_);
   }
 
   int row_size() const { return row_size_; }
@@ -187,6 +200,7 @@ class PioFile {
   int row_size_;
   int num_samples_;
   int num_loci_;
+  int cur_locus_;
 };
 
 class PioFiles {
@@ -232,6 +246,20 @@ class PioFiles {
     return pio_files_[0]->get_sample(sample_id);
   }
 
+  pio_locus_t* get_locus(size_t locus_id) {
+    for (int i = 0; i < pio_files_.size(); i++) {
+      if (locus_id < pio_files_[i]->num_loci())
+        return pio_files_[i]->get_locus(locus_id);
+      locus_id -= pio_files_[i]->num_loci();
+    }
+    return nullptr;
+  }
+
+  // return loci that will be read by the next call to next_row
+  pio_locus_t* get_cur_locus() {
+    return pio_files_[cur_file_]->get_cur_locus();
+  }
+
  private:
   std::vector<std::shared_ptr<PioFile>> pio_files_;
   int cur_file_;
@@ -270,7 +298,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     throw std::invalid_argument(std::string("ERROR: --out option must be specified"));
   simu_options.out_pheno = simu_options.out + ".pheno";
   for (int i = 0; i < simu_options.num_traits; i++)
-    simu_options.out_causals.push_back(simu_options.out + "." + boost::lexical_cast<std::string>(i) + ".causals");
+    simu_options.out_causals.push_back(simu_options.out + "." + boost::lexical_cast<std::string>(i+1) + ".causals");
 
   if ( boost::filesystem::exists( simu_options.out_pheno ) )
   {
@@ -400,7 +428,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
 }
 
 void describe_simu_options(SimuOptions& s, Logger& log) {
-  log << "Options in effect (after applying default setting to non-specific parameters):\n";
+  log << "Options in effect (after applying default setting to non-specified parameters):\n";
   if (!s.bfile.empty()) log << "\t--bfile " << s.bfile << " \\\n";
   if (!s.bfile_chr.empty()) log << "\t--bfile-chr " << s.bfile_chr << " \\\n";
   if (s.qt) log << "\t--qt \\\n";
@@ -656,6 +684,34 @@ void save_pheno_file(const SimuOptions& simu_options, PioFiles* pio_files,
   }
 }
 
+void save_causals_file(const SimuOptions& simu_options,
+                       const std::string& out_causal, PioFiles* pio_files,
+                       const std::vector<int>& component_per_variant,
+                       const std::vector<double>& effect_per_variant) {
+  std::ofstream file(out_causal);
+  file << "SNP\tCHR\tPOS\tA1\tA2";
+  for (int i = 0; i < simu_options.num_components; i++) file << "\tBETA_c" << i;
+  file << "\n";
+  for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
+    if (component_per_variant[variant_index] != -1) {
+      pio_locus_t* locus = pio_files->get_locus(variant_index);
+      if (locus == nullptr) {
+        std::stringstream ss; ss << "ERROR: unable to read locus with index " << variant_index;
+        throw(std::runtime_error(ss.str()));
+      }
+
+      file << locus->name << "\t";
+      file << static_cast<int>(locus->chromosome) << "\t";
+      file << locus->bp_position << "\t";
+      file << locus->allele1 << "\t";
+      file << locus->allele2;
+      for (int i = 0; i < simu_options.num_components; i++)
+        file << "\t" << ((i == component_per_variant[variant_index]) ? effect_per_variant[variant_index] : 0.0);
+      file << "\n";
+    }
+  }
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -690,6 +746,7 @@ main(int argc, char *argv[])
     // expand documentation - format of output files
     // for case-control traits, in pheno file, 1=unaffected (control), 2=affected (case); -9 for missing
     // feature - read causal effect sizes from file (instead of simulating them)
+    // test and implement how to pass negative rg (since it starts with minus)
 
     po::variables_map vm;
     store(po::command_line_parser(argc, argv).options(po_options).run(), vm);
@@ -720,7 +777,7 @@ main(int argc, char *argv[])
       std::vector<int> component_per_variant;
       find_causals(simu_options, rng, &component_per_variant);
 
-      log << "Calculate allele frequencies for causal markers only... \n";
+      log << "Calculate allele frequencies (for causal markers only)... \n";
       std::vector<double> freq_vec;  // vector of allele frequency; NB! vector has -1 for non-causal variants, as we don't need them anywhere later;
       find_freq(simu_options, component_per_variant, &pio_files, &freq_vec);
 
@@ -746,11 +803,14 @@ main(int argc, char *argv[])
       }
 
       // Save phenotypes to output files
+      log << "Save phenotypes to " << simu_options.out_pheno << "...\n";
       save_pheno_file(simu_options, &pio_files, pheno1_per_sample, pheno2_per_sample);
-      log << "Phenotypes saved to " << simu_options.out_pheno << "\n";
 
       // Save causals to output files
-      // TBD
+      log << "Save causal variants and their effect sizes to "
+          << simu_options.out << ((simu_options.num_traits==2) ? ".*" : ".1") << ".causals...\n";
+      save_causals_file(simu_options, simu_options.out_causals[0], &pio_files, component_per_variant, effect1_per_variant);
+      if (simu_options.num_traits==2) save_causals_file(simu_options, simu_options.out_causals[1], &pio_files, component_per_variant, effect2_per_variant);
 
       if (simu_options.verbose) {  // debug printing
         log << "[VERBOSE] First 10 elements in resulting files:\n";
