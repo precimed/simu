@@ -23,6 +23,12 @@ namespace po = boost::program_options;
 
 #include <plinkio/plinkio.h>
 
+#define DEFAULT_SIGSQ 1.0f
+#define DEFAULT_CAUSAL_PI 0.001f
+#define DEFAULT_HSQ 0.7f
+#define DEFAULT_RG 0.0f
+#define DEFAULT_K 0.1f
+
 struct SimuOptions {
   std::string bfile;
   std::string bfile_chr;
@@ -45,6 +51,7 @@ struct SimuOptions {
   std::string keep;                          // not implemented
   std::string out;
   boost::int64_t seed;
+  bool verbose;
 
   // derived options
   std::vector<std::string> bfiles;
@@ -70,6 +77,13 @@ class Logger {
     std::cout << rhs;
     log_file_ << rhs;
     return *this;
+  }
+
+  template <typename T>
+  Logger& operator<< (const std::vector<T>& rhs) {
+    for (int i = 0; i < rhs.size(); i++)
+      (*this) << ((i>0) ? " " : "") << rhs[i];
+    return (*this);
   }
 
  private:
@@ -174,10 +188,17 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     log << "WARNING: Target file " << simu_options.out_pheno << " already exists and will be overwritten\n"; 
   }
 
-  if (simu_options.qt && (vm.count("k") > 0 || vm.count("ncas") > 0 || vm.count("ncon") > 0))
+  if (simu_options.qt && (vm.count("k") > 0 || vm.count("ncas") > 0 || vm.count("ncon") > 0)) {
     log << "WARNING: Options --k, --ncas, --ncon are not relevant to --qt, and will be ignored\n";
-  if ((simu_options.num_traits==1) && (vm.count("trait2-sigsq") > 0))
-    log << "WARNING: Option --trait2-sigsq is not relevant for a single-trait simulations, and will be ignored\n";
+    simu_options.k.clear();
+    simu_options.ncas.clear();
+    simu_options.ncon.clear();
+  }
+  if ((simu_options.num_traits==1) && (vm.count("trait2-sigsq") > 0 || (vm.count("rg") > 0))) {
+    log << "WARNING: Options --trait2-sigsq and --rg are not relevant for a single-trait simulations, and will be ignored\n";
+    simu_options.trait2_sigsq.clear();
+    simu_options.rg.clear();
+  }
 
   if (simu_options.cc && (simu_options.ncas.empty() != simu_options.ncon.empty()))
     throw std::invalid_argument("ERROR: Options --ncas and --ncon must be either both present, or both absent");
@@ -193,15 +214,17 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
   if (!simu_options.hsq.empty() && (simu_options.hsq.size() != simu_options.num_traits))
     throw std::invalid_argument(std::string("ERROR: Number of --hsq values does not match the number of traits"));
 
-  // initialize default value for k (prevalence for case/control trait) and check for out of range values
-  if (simu_options.k.empty())
-    for (int i = 0; i < simu_options.num_traits; i++) simu_options.k.push_back(0.1f);
-  for (auto val: simu_options.k) if (val <= 0 || val >= 1)
-    throw std::invalid_argument(std::string("ERROR: Prevalence --k must be between 0.0 and 1.0"));
+  if (simu_options.cc) {
+    // initialize default value for k (prevalence for case/control trait) and check for out of range values
+    if (simu_options.k.empty())
+      for (int i = 0; i < simu_options.num_traits; i++) simu_options.k.push_back(DEFAULT_K);
+    for (auto val: simu_options.k) if (val <= 0 || val >= 1)
+      throw std::invalid_argument(std::string("ERROR: Prevalence --k must be between 0.0 and 1.0"));
+  }
 
   // inidialize default value for hsq (heritability) and check for out of range values
   if (simu_options.hsq.empty())
-    for (int i = 0; i < simu_options.num_traits; i++) simu_options.hsq.push_back(0.7f);
+    for (int i = 0; i < simu_options.num_traits; i++) simu_options.hsq.push_back(DEFAULT_HSQ);
   for (auto val: simu_options.hsq) if (val <= 0 || val >= 1)
     throw std::invalid_argument(std::string("ERROR: Heritability --hsq must be between 0.0 and 1.0"));
 
@@ -209,7 +232,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
   if (!simu_options.causal_pi.empty() && (simu_options.causal_pi.size() != simu_options.num_components))
     throw std::invalid_argument(std::string("ERROR: Number of --causal-pi values does not match the number of components"));
   if (simu_options.causal_pi.empty())
-    for (int i = 0; i < simu_options.num_components; i++) simu_options.causal_pi.push_back(0.001f);
+    for (int i = 0; i < simu_options.num_components; i++) simu_options.causal_pi.push_back(DEFAULT_CAUSAL_PI);
   for (auto val: simu_options.causal_pi) if (val <= 0 || val >= 1)
     throw std::invalid_argument(std::string("ERROR: --causal-pi values must be between 0.0 and 1.0"));
 
@@ -219,7 +242,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     if (!target.empty() && (target.size() != simu_options.num_components))
       throw std::invalid_argument(std::string("ERROR: Number of --trait1-sigsq values does not match the number of components"));
     if (target.empty())
-      for (int i = 0; i < simu_options.num_components; i++) target.push_back(0.001f);
+      for (int i = 0; i < simu_options.num_components; i++) target.push_back(DEFAULT_SIGSQ);
     for (auto val: target) if (val < 0)
       throw std::invalid_argument(std::string("ERROR: --trait1-sigsq must be non-negative"));
   }
@@ -230,18 +253,18 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     if (!target.empty() && (target.size() != simu_options.num_components))
       throw std::invalid_argument(std::string("ERROR: Number of --trait2-sigsq values does not match the number of components"));
     if (target.empty())
-      for (int i = 0; i < simu_options.num_components; i++) target.push_back(0.001f);
+      for (int i = 0; i < simu_options.num_components; i++) target.push_back(DEFAULT_SIGSQ);
     for (auto val: target) if (val < 0)
       throw std::invalid_argument(std::string("ERROR: --trait2-sigsq must be non-negative"));
   }
 
   // initialize default value for --rg and check for out of range values
-  {
+  if (simu_options.num_traits >= 2) {
     auto& target = simu_options.rg;
     if (!target.empty() && (target.size() != simu_options.num_components))
       throw std::invalid_argument(std::string("ERROR: Number of --rg values does not match the number of components"));
     if (target.empty())
-      for (int i = 0; i < simu_options.num_components; i++) target.push_back(0.0f);
+      for (int i = 0; i < simu_options.num_components; i++) target.push_back(DEFAULT_RG);
     for (auto val: target) if (val < -1.0f || val > 1.0f)
       throw std::invalid_argument(std::string("ERROR: --rg values must be between -1.0 and 1.0"));
   }
@@ -284,6 +307,32 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
 
   if (vm.count("seed") == 0)
     log << "--seed option was set to " << simu_options.seed << "\n";
+}
+
+void describe_simu_options(SimuOptions& s, Logger& log) {
+  log << "Options in effect (after applying default setting to non-specific parameters):\n";
+  if (!s.bfile.empty()) log << "\t--bfile " << s.bfile << " \\\n";
+  if (!s.bfile_chr.empty()) log << "\t--bfile-chr " << s.bfile_chr << " \\\n";
+  if (s.qt) log << "\t--qt \\\n";
+  if (s.cc) log << "\t--cc \\\n";
+  log << "\t--num-traits " << s.num_traits << " \\\n";
+  if (!s.k.empty()) log << "\t--k " << s.k << " \\\n";
+  if (!s.ncas.empty()) log << "\t--ncas " << s.ncas << " \\\n";
+  if (!s.ncon.empty()) log << "\t--ncon " << s.ncon << " \\\n";
+  if (!s.hsq.empty()) log << "\t--hsq " << s.hsq << " \\\n";
+  log << "\t--num-components " << s.num_components << " \\\n";
+  if (!s.causal_variants.empty()) log << "\t--causal-variants " << s.causal_variants << " \\\n";
+  if (!s.causal_n.empty()) log << "\t--causal-n " << s.causal_n << " \\\n";
+  if (!s.causal_pi.empty()) log << "\t--causal-pi " << s.causal_pi << " \\\n";
+  if (!s.causal_regions.empty()) log << "\t--causal-regions " << s.causal_regions << " \\\n";
+  if (!s.trait1_sigsq.empty()) log << "\t--trait1-sigsq " << s.trait1_sigsq << " \\\n";
+  if (!s.trait2_sigsq.empty()) log << "\t--trait2-sigsq " << s.trait2_sigsq << " \\\n";
+  if (!s.rg.empty()) log << "\t--rg " << s.rg << " \\\n";
+  if (!s.out.empty()) log << "\t--out " << s.out << " \\\n";
+  log << "\t--seed " << s.seed << " \\\n";
+  if (s.verbose) log << "\t--verbose \\\n";
+  if (s.gcta_sigma) log << "\t--gcta-sigma \\\n";
+  if (!s.keep.empty()) log << "\t--keep " << s.keep << " \\\n";
 }
 
 void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, std::vector<int>* component_per_variant) {
@@ -379,6 +428,7 @@ main(int argc, char *argv[])
       ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "coefficient of genetic correlation; by default 0.0; one value per mixture component")
       ("out", po::value(&simu_options.out)->default_value("simu"), "Prefix of the output file; will generate .pheno file (phenotypes) and .1.causals file (one per trait, list MarkerName for all causal variants and their effect sizes.")
       ("seed", po::value(&simu_options.seed), "Seed for random numbers generator (default is time-dependent seed)")
+      ("verbose", po::bool_switch(&simu_options.verbose)->default_value(false), "enable verbose logging")
     ;
 
     po::variables_map vm;
@@ -398,6 +448,9 @@ main(int argc, char *argv[])
       // fix_and_validate needs to read input bfiles as it needs to know num_samples
       std::vector<std::shared_ptr<PioFile>> pio_files;
       fix_and_validate(simu_options, vm, log, &pio_files);
+
+      if (simu_options.verbose)
+        describe_simu_options(simu_options, log);
 
       // Generator of random numbers
       boost::mt19937 rng(simu_options.seed);
