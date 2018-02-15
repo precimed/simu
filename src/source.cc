@@ -169,6 +169,10 @@ class PioFile {
     pio_reset_row(&plink_file_);
   }
 
+  pio_sample_t* get_sample(size_t sample_id) {
+    return pio_get_sample(&plink_file_, sample_id);
+  }
+
   int row_size() const { return row_size_; }
   int num_samples() const { return num_samples_; }
   int num_loci() const { return num_loci_; }  // I use "loci" here to be consistent with plinkio terminology, but everywhere else it goes as "variants"
@@ -222,6 +226,10 @@ class PioFiles {
     for (int i = 0; i < pio_files_.size(); i++)
       pio_files_[i]->reset_row();
     cur_file_ = 0;
+  }
+
+  pio_sample_t* get_sample(size_t sample_id) {
+    return pio_files_[0]->get_sample(sample_id);
   }
 
  private:
@@ -633,6 +641,21 @@ void apply_liability_threshold(float k, int ncas, int ncon, boost::mt19937& rng,
   for (int i = 0; i < ncas; i++) pheno_per_sample->at(index[cas_inds[i]]) = 2;
 }
 
+void save_pheno_file(const SimuOptions& simu_options, PioFiles* pio_files,
+                     const std::vector<double>& pheno1_per_sample, const std::vector<double>& pheno2_per_sample) {
+  std::ofstream file(simu_options.out_pheno);
+  const bool bivariate = (simu_options.num_traits==2);
+  
+  file << "FID\tIID\ttrait1" << (bivariate ? "\ttrait2" : "") << "\n";
+  for (int i = 0; i < pheno1_per_sample.size(); i++) {
+    pio_sample_t* sample = pio_files->get_sample(i);
+    file << sample->fid << "\t" << sample->iid << "\t";
+    file << pheno1_per_sample[i];
+    if (bivariate) file << "\t" << pheno2_per_sample[i];
+    file << "\n";
+  }
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -723,7 +746,8 @@ main(int argc, char *argv[])
       }
 
       // Save phenotypes to output files
-      // TBD
+      save_pheno_file(simu_options, &pio_files, pheno1_per_sample, pheno2_per_sample);
+      log << "Phenotypes saved to " << simu_options.out_pheno << "\n";
 
       // Save causals to output files
       // TBD
