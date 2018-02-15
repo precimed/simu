@@ -79,6 +79,7 @@ class Logger {
     // boost::posix_time::time_facet *facet = new boost::posix_time::time_facet("%d-%b-%Y %H:%M:%S");
     // std::cout.imbue(std::locale(std::cout.getloc(), facet));
     // log_file_.imbue(std::locale(log_file_.getloc(), facet));
+    // std::cout << std::setprecision(9);
   }
 
   template <typename T>
@@ -561,16 +562,16 @@ void find_pheno(const SimuOptions& simu_options,
       throw std::runtime_error(ss.str());
     }
 
-    double averag_A1_copies = 2 * freq_vec[variant_index]; 
+    double average_A1_dosage = 2 * freq_vec[variant_index]; 
     for (int sample_index = 0; sample_index < simu_options.num_samples; sample_index++) {
       // missing value have 0 contribution to phenotype.
-      // This is because best we can do is to replace missing value with "2x(allele frequency)" (e.i. averag_A1_copies),
+      // This is because best we can do is to replace missing value with "2x(allele frequency)" (e.i. average_A1_dosage),
       // which cancels out because we center by "2x(allele frequency)".
       if (buffer[sample_index] == 3) continue;
-      double num_of_A1_copies = static_cast<double>(2 - buffer[sample_index]);
+      double num_of_A1_copies = static_cast<double>(2 - buffer[sample_index]);  // 0 = AA, 1 = Aa, 2 = aa
 
-      pheno1_per_sample->at(sample_index) += (num_of_A1_copies - averag_A1_copies) * effect1_per_variant[variant_index];
-      if (bivariate) pheno2_per_sample->at(sample_index) += (num_of_A1_copies - averag_A1_copies) * effect2_per_variant[variant_index];
+      pheno1_per_sample->at(sample_index) += (num_of_A1_copies - average_A1_dosage) * effect1_per_variant[variant_index];
+      if (bivariate) pheno2_per_sample->at(sample_index) += (num_of_A1_copies - average_A1_dosage) * effect2_per_variant[variant_index];
     }
   }
 
@@ -581,6 +582,29 @@ void find_pheno(const SimuOptions& simu_options,
   }
 
   pio_files->reset_row();
+}
+
+void apply_heritability(float hsq, boost::mt19937& rng, std::vector<double>* pheno_per_sample, std::vector<double>* effect_per_variant) {
+  double pheno_var = 0.0;
+  double n = static_cast<double>(pheno_per_sample->size());
+  for (int i = 0; i < pheno_per_sample->size(); i++) pheno_var += (pheno_per_sample->at(i) * pheno_per_sample->at(i));
+  pheno_var = pheno_var / n;
+
+  std::vector<double> noise;
+  boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > random_normal(rng, boost::normal_distribution<>());
+  for (int i = 0; i < pheno_per_sample->size(); i++) noise.push_back(random_normal());
+  
+  double gen_coef = 0, env_coef = 0;
+  if ((fabs(hsq) <= FLT_EPSILON) || (fabs(pheno_var) <= FLT_EPSILON)) {
+    // This is an interesting case --- why there are some true casual SNPs, and yet heritability is 0?
+    gen_coef = 0; env_coef = 1;
+  } else {
+    gen_coef = sqrt(hsq / pheno_var);
+    env_coef = sqrt(1.0 - hsq);  // under assumption of var(noise)==1.
+  }
+
+  for (int i = 0; i < pheno_per_sample->size(); i++) pheno_per_sample->at(i) = pheno_per_sample->at(i) * gen_coef + noise[i] * env_coef;
+  for (int i = 0; i < effect_per_variant->size(); i++) effect_per_variant->at(i) *= gen_coef;
 }
 
 int
@@ -659,7 +683,8 @@ main(int argc, char *argv[])
                  &pio_files, &pheno1_per_sample, &pheno2_per_sample);
 
       // Apply heritability
-      // TBD
+      apply_heritability(simu_options.hsq[0], rng, &pheno1_per_sample, &effect1_per_variant);
+      if (simu_options.num_traits==2) apply_heritability(simu_options.hsq[1], rng, &pheno2_per_sample, &effect2_per_variant);
 
       // Apply liability threshold model
       // TBD
