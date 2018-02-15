@@ -607,6 +607,32 @@ void apply_heritability(float hsq, boost::mt19937& rng, std::vector<double>* phe
   for (int i = 0; i < effect_per_variant->size(); i++) effect_per_variant->at(i) *= gen_coef;
 }
 
+void apply_liability_threshold(float k, int ncas, int ncon, boost::mt19937& rng, std::vector<double>* pheno_per_sample) {
+  std::vector<int> index(pheno_per_sample->size(), 0);
+  for (int i = 0 ; i != index.size() ; i++) index[i] = i;
+  std::sort(index.begin(), index.end(), [&](const int& a, const int& b) { return (pheno_per_sample->at(a) < pheno_per_sample->at(b)); });
+  // now, pheno[index[0]] is the smallest element of pheno.
+
+  int n = static_cast<int>(pheno_per_sample->size());
+  int max_ncas = floor(k * n);
+  int max_ncon = n - max_ncas;
+
+  std::vector<int> cas_inds, con_inds;
+  for (int i = 0; i < max_ncon; i++) con_inds.push_back(i);
+  for (int i = max_ncon; i < n; i++) cas_inds.push_back(i);
+  
+  boost::variate_generator<boost::mt19937&, boost::uniform_int<> > random_integer(rng, boost::uniform_int<>());
+  std::random_shuffle(con_inds.begin(), con_inds.end(), random_integer);
+  std::random_shuffle(cas_inds.begin(), cas_inds.end(), random_integer);
+
+  if (con_inds.size() < ncon) throw(std::runtime_error("ERROR: too many controls requested"));
+  if (cas_inds.size() < ncas) throw(std::runtime_error("ERROR: too many cases requested"));
+
+  for (int i = 0; i < n; i++) pheno_per_sample->at(i) = -9;
+  for (int i = 0; i < ncon; i++) pheno_per_sample->at(index[con_inds[i]]) = 1;
+  for (int i = 0; i < ncas; i++) pheno_per_sample->at(index[cas_inds[i]]) = 2;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -637,6 +663,10 @@ main(int argc, char *argv[])
       ("seed", po::value(&simu_options.seed), "Seed for random numbers generator (default is time-dependent seed)")
       ("verbose", po::bool_switch(&simu_options.verbose)->default_value(false), "enable verbose logging")
     ;
+
+    // expand documentation - format of output files
+    // for case-control traits, in pheno file, 1=unaffected (control), 2=affected (case); -9 for missing
+    // feature - read causal effect sizes from file (instead of simulating them)
 
     po::variables_map vm;
     store(po::command_line_parser(argc, argv).options(po_options).run(), vm);
@@ -687,7 +717,10 @@ main(int argc, char *argv[])
       if (simu_options.num_traits==2) apply_heritability(simu_options.hsq[1], rng, &pheno2_per_sample, &effect2_per_variant);
 
       // Apply liability threshold model
-      // TBD
+      if (simu_options.cc) {
+        apply_liability_threshold(simu_options.k[0], simu_options.ncas[0], simu_options.ncon[0], rng, &pheno1_per_sample);
+        if (simu_options.num_traits==2) apply_liability_threshold(simu_options.k[1], simu_options.ncas[1], simu_options.ncon[1], rng, &pheno2_per_sample);
+      }
 
       // Save phenotypes to output files
       // TBD
