@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include <algorithm>
 #include <iostream>
@@ -9,16 +10,20 @@
 #include <sstream>
 #include <vector>
 #include <fstream>
+#include <limits>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/math/special_functions/fpclassify.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
 #include <boost/random/normal_distribution.hpp>
 #include <boost/random/variate_generator.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/posix_time/posix_time_io.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+
 namespace po = boost::program_options;
 
 #include <plinkio/plinkio.h>
@@ -70,7 +75,11 @@ struct SimuOptions {
 
 class Logger {
  public:
-  Logger(std::string path) : log_file_(path) { }
+  Logger(std::string path) : log_file_(path) { 
+    // boost::posix_time::time_facet *facet = new boost::posix_time::time_facet("%d-%b-%Y %H:%M:%S");
+    // std::cout.imbue(std::locale(std::cout.getloc(), facet));
+    // log_file_.imbue(std::locale(log_file_.getloc(), facet));
+  }
 
   template <typename T>
   Logger& operator<< ( const T& rhs) {
@@ -113,24 +122,46 @@ void log_header(int argc, char *argv[], Logger &log) {
 
 class PioFile {
  public:
-  PioFile(std::string bfile) {
+  PioFile(std::string bfile) : bfile_(bfile) {
     if( pio_open( &plink_file_, bfile.c_str() ) != PIO_OK )
     {
-      std::stringstream ss;
-      ss << "ERROR: Could not open " << bfile;
+      std::stringstream ss; ss << "ERROR: Could not open " << bfile;
       throw std::runtime_error(ss.str());
     }
 
     if( !pio_one_locus_per_row( &plink_file_ ) )
     {
-      std::stringstream ss;
-      ss << "ERROR: Unsupported format in " << bfile << ", snps must be rows, samples must be columns";
+      std::stringstream ss; ss << "ERROR: Unsupported format in " << bfile << ", snps must be rows, samples must be columns";
       throw std::runtime_error(ss.str());
     }
 
     row_size_ = pio_row_size( &plink_file_ );
+    if (row_size_ == 0) {
+      std::stringstream ss; ss << "ERROR: Unsupported format in " << bfile << ", rows appears to have zero size";
+      throw std::runtime_error(ss.str());
+    }
+
     num_samples_ = pio_num_samples( &plink_file_ );
     num_loci_ = pio_num_loci( &plink_file_ );
+  }
+
+  pio_status_t skip_row() { 
+    pio_status_t retval = pio_skip_row(&plink_file_);
+    if (retval == PIO_ERROR) {
+      std::stringstream ss; ss << "ERROR: Error reading from " << bfile_;
+      throw std::runtime_error(ss.str());
+    }
+    return retval;
+  }
+
+  pio_status_t next_row(std::vector<snp_t> *buffer) {
+    if (buffer->size() != row_size_) buffer->resize(row_size_);
+    pio_status_t retval = pio_next_row(&plink_file_, &(*buffer)[0]);
+    if (retval == PIO_ERROR) {
+      std::stringstream ss; ss << "ERROR: Error reading from " << bfile_;
+      throw std::runtime_error(ss.str());
+    }
+    return retval;
   }
 
   int row_size() const { return row_size_; }
@@ -142,14 +173,53 @@ class PioFile {
   }
 
  private:
+  std::string bfile_;
   pio_file_t plink_file_;
   int row_size_;
   int num_samples_;
   int num_loci_;
 };
 
+class PioFiles {
+ public:
+  PioFiles() { cur_file_ = 0; }
+  void push_back(std::shared_ptr<PioFile> pio_file) {
+    pio_files_.push_back(pio_file);
+  }
+
+  pio_status_t skip_row() {
+    while (true) {
+      if (cur_file_ >= pio_files_.size()) {
+        return PIO_END;
+      }
+
+      if (pio_files_[cur_file_]->skip_row() == PIO_OK)
+        return PIO_OK;
+       
+      cur_file_++;
+    }
+  }
+
+  pio_status_t next_row(std::vector<snp_t>* buffer) {
+    while (true) {
+      if (cur_file_ >= pio_files_.size()) {
+        return PIO_END;
+      }
+
+      if (pio_files_[cur_file_]->next_row(buffer) == PIO_OK)
+        return PIO_OK;
+       
+      cur_file_++;
+    }
+  }
+
+ private:
+  std::vector<std::shared_ptr<PioFile>> pio_files_;
+  int cur_file_;
+};
+
 void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& log,
-                      std::vector<std::shared_ptr<PioFile>>* pio_files) {
+                      PioFiles* pio_files) {
   // Validate and pre-process --bfile / --bfile-chr options.
   if (simu_options.bfile.empty() && simu_options.bfile_chr.empty())
     throw std::invalid_argument(std::string("ERROR: Either --bfile or --bfile-chr must be specified"));
@@ -272,14 +342,15 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
   // Read bfiles (one or 22)
   for (auto bfile: simu_options.bfiles) {
     log << "Opening " << bfile << "... ";
-    pio_files->push_back(std::make_shared<PioFile>(bfile));
+    auto pio_file = std::make_shared<PioFile>(bfile);
+    pio_files->push_back(pio_file);
     log << "done, "
-        << pio_files->back()->num_samples() << " samples, "
-        << pio_files->back()->num_loci() << " variants.\n";
-    if (simu_options.num_samples < 0) simu_options.num_samples = pio_files->back()->num_samples();
-    if (simu_options.num_samples != pio_files->back()->num_samples())
+        << pio_file->num_samples() << " samples, "
+        << pio_file->num_loci() << " variants.\n";
+    if (simu_options.num_samples < 0) simu_options.num_samples = pio_file->num_samples();
+    if (simu_options.num_samples != pio_file->num_samples())
       throw std::runtime_error("ERROR: Inconsistent number of subjects in --bfile-chr input");
-    simu_options.num_variants += pio_files->back()->num_loci();
+    simu_options.num_variants += pio_file->num_loci();
   }
 
   // Initialize or validate ncas/ncon parameters
@@ -356,6 +427,48 @@ void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, std::vec
     for (int causal_index = 0; causal_index < num_causals_per_component; causal_index++, permuted_index++) {
       component_per_variant->at(variant_indices_permutation[permuted_index]) = component_index;
     }
+  }
+}
+
+void find_freq(const SimuOptions& simu_options, 
+               const std::vector<int>& component_per_variant,
+               PioFiles* pio_files, 
+               std::vector<double>* freq_vec) {
+  freq_vec->clear();
+  std::vector<snp_t> buffer;
+  for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
+    freq_vec->push_back(std::numeric_limits<double>::quiet_NaN());
+
+    if (component_per_variant[variant_index] == -1) {
+      // skip variant because we are not interested
+      pio_status_t retval = pio_files->skip_row();
+      if (retval == PIO_END) {
+        std::stringstream ss; ss << "ERROR: expect to find " << simu_options.num_variants << " variants across input files; found only " << variant_index << ". Are input Plink files corrupted?";
+        throw std::runtime_error(ss.str());
+      }
+
+      continue;
+    }
+
+    pio_status_t retval = pio_files->next_row(&buffer);
+    if (retval == PIO_END) {
+      std::stringstream ss; ss << "ERROR: expect to find " << simu_options.num_variants << " variants across input files; found only " << variant_index << ". Are input Plink files corrupted?";
+      throw std::runtime_error(ss.str());
+    }
+
+    int genocount[4] = {0, 0, 0, 0};   // 0 = AA, 1 = Aa, 2 = aa, 3 = missing
+    for (int i = 0; i < simu_options.num_samples; i++) {
+      genocount[(int)buffer[i]]++;
+    }
+
+    int genocount_non_missing = genocount[2] + genocount[1] + genocount[0];
+    freq_vec->at(variant_index) = (genocount_non_missing == 0) ? 0.0 : static_cast<double>(2 * genocount[0] + 1 * genocount[1]) / static_cast<double>(2 * genocount_non_missing);
+  }
+
+  // sanity-check -- now we should have reached end of the stream
+  if (pio_files->skip_row() != PIO_END) {
+    std::stringstream ss; ss << "ERROR: expect to find " << simu_options.num_variants << " variants across input files; more variants found. Are input Plink files corrupted?";
+    throw std::runtime_error(ss.str());
   }
 }
 
@@ -445,8 +558,11 @@ main(int argc, char *argv[])
     log_header(argc, argv, log);
 
     try {
+      auto analysis_started = boost::posix_time::second_clock::local_time();
+      log << "Analysis started: " << analysis_started << "\n";
+
       // fix_and_validate needs to read input bfiles as it needs to know num_samples
-      std::vector<std::shared_ptr<PioFile>> pio_files;
+      PioFiles pio_files;
       fix_and_validate(simu_options, vm, log, &pio_files);
 
       if (simu_options.verbose)
@@ -459,16 +575,25 @@ main(int argc, char *argv[])
       std::vector<int> component_per_variant;
       find_causals(simu_options, rng, &component_per_variant);
 
+      std::vector<double> freq_vec;  // vector of allele frequency; NB! vector has -1 for non-causal variants, as we don't need them anywhere later;
+      find_freq(simu_options, component_per_variant, &pio_files, &freq_vec);
+
       // Find effect sizes for causla variants (one per trait)
       std::vector<double> effect1_per_variant, effect2_per_variant;
       if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
       else find_effect_sizes_bivariate(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);
   
-      // for (int i = 0; i < 10; i++) {if (i >= component_per_variant.size()) break; std::cout << component_per_variant[i] << " "; }; std::cout << "\n";
-      // for (int i = 0; i < 10; i++) {if (i >= effect1_per_variant.size()) break; std::cout << effect1_per_variant[i] << " "; }; std::cout << "\n";
-      // for (int i = 0; i < 10; i++) {if (i >= effect2_per_variant.size()) break; std::cout << effect2_per_variant[i] << " "; }; std::cout << "\n";
+      if (0) {  // debug printing
+        for (int i = 0; i < 10; i++) {if (i >= component_per_variant.size()) break; std::cout << component_per_variant[i] << " "; }; std::cout << "\n";
+        for (int i = 0; i < 10; i++) {if (i >= freq_vec.size()) break; std::cout << freq_vec[i] << " "; }; std::cout << "\n";
+        for (int i = 0; i < 10; i++) {if (i >= effect1_per_variant.size()) break; std::cout << effect1_per_variant[i] << " "; }; std::cout << "\n";
+        for (int i = 0; i < 10; i++) {if (i >= effect2_per_variant.size()) break; std::cout << effect2_per_variant[i] << " "; }; std::cout << "\n";
+      }
 
       // TBD - implement the logic
+      auto analysis_finished = boost::posix_time::second_clock::local_time();
+      log << "Analysis finished: " << analysis_finished << "\n";
+      log << "Elapsed time: " << analysis_finished - analysis_started << "\n";
     } catch(std::exception& e) {
       log << e.what() << "\n";
       return EXIT_FAILURE;
