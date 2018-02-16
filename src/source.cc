@@ -965,21 +965,21 @@ main(int argc, char *argv[])
     SimuOptions simu_options;
     po::options_description po_options("SIMU " VERSION " - library for simulation of GWAS summary statistics");
     po_options.add_options()
-      ("help,h", "produce help message")    
-      ("bfile", po::value(&simu_options.bfile), "Prefix for Plink .bed/.bim/.fam file")
+      ("help,h", "produce this help message")    
+      ("bfile", po::value(&simu_options.bfile), "prefix for plink .bed/.bim/.fam file")
       ("bfile-chr", po::value(&simu_options.bfile_chr),
-        "Same as --bfile, but will automatically concatenate .bed/.bim/.fam files split "
+        "same as --bfile, but will automatically concatenate .bed/.bim/.fam files split "
         "across 22 chromosomes. If the filename prefix contains the symbol @, SIMU will "
         "replace the @ symbol with chromosome numbers. Otherwise, SIMU will append chromosome "
         "numbers to the end of the filename prefix.")
       ("qt", po::bool_switch(&simu_options.qt)->default_value(false), "simulate quantitative trait")
       ("cc", po::bool_switch(&simu_options.cc)->default_value(false), "simulate case/control trait")
-      ("num-traits", po::value(&simu_options.num_traits)->default_value(1), "Number of traits (either 1 or 2 traits are supported)")
+      ("num-traits", po::value(&simu_options.num_traits)->default_value(1), "number of traits (either 1 or 2 traits are supported)")
       ("k", po::value< std::vector<float> >(&simu_options.k)->multitoken(), "prevalence for case/control traits, by default 0.1; one value per trait")
       ("ncas", po::value< std::vector<int> >(&simu_options.ncas)->multitoken(), "number of cases, by default N*k; one value per trait")
       ("ncon", po::value< std::vector<int> >(&simu_options.ncon)->multitoken(), "number of controls, by default N*(1-k); one value per trait")
       ("hsq", po::value< std::vector<float> >(&simu_options.hsq)->multitoken(), "heritability, by default 0.7; one value per trait")
-      ("num-components", po::value(&simu_options.num_components)->default_value(1), "Number of components in the mixture")      
+      ("num-components", po::value(&simu_options.num_components)->default_value(1), "number of components in the mixture")      
       ("causal-pi", po::value< std::vector<float> >(&simu_options.causal_pi)->multitoken(), "proportion of causal variants; by default 0.001; one value per mixture component")
       ("causal-n", po::value< std::vector<int> >(&simu_options.causal_n)->multitoken(), "number of causal variants (alternative to --causal-pi option); one value per mixture component")
       ("causal-variants", po::value< std::vector<std::string> >(&simu_options.causal_variants)->multitoken(), "file with a list of causal variants and, optionally, their effect sizes (alternative to --causal-pi option); one file per mixture component")
@@ -993,8 +993,8 @@ main(int argc, char *argv[])
       ("gcta-sigma", po::bool_switch(&simu_options.gcta_sigma)->default_value(false), "draw effect sizes with variance inversely proportional to sqrt(2*p(1-p)), where p is allele frequency.")
       ("norm-effect", po::bool_switch(&simu_options.norm_effect)->default_value(false), "report effect sizes w.r.t. normalized genotypes (e.i. 0,1,2 genotypes devided by sqrt(2*p(1-p))). Default is to report effect size w.r.t. additively coded (0,1,2) genotypes.")
       ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "[TBD: support negative values] coefficient of genetic correlation; by default 0.0; one value per mixture component")
-      ("out", po::value(&simu_options.out)->default_value("simu"), "Prefix of the output file; will generate .pheno file (phenotypes) and .1.causals file (one per trait, list MarkerName for all causal variants and their effect sizes.")
-      ("seed", po::value(&simu_options.seed), "Seed for random numbers generator (default is time-dependent seed)")
+      ("out", po::value(&simu_options.out)->default_value("simu"), "prefix of the output file; will generate .pheno file (phenotypes) and .1.causals file (one per trait, list MarkerName for all causal variants and their effect sizes.")
+      ("seed", po::value(&simu_options.seed), "seed for random numbers generator (default is time-dependent seed)")
       ("verbose", po::bool_switch(&simu_options.verbose)->default_value(false), "enable verbose logging")
     ;
 
