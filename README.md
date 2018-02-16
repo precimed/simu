@@ -4,6 +4,7 @@ TBD:
 * explain file formats, both input and output
 * explain difference between ``--gcta-sigma`` and ``--norm-effect``
 * explain causal regions feature, and why they must not overlap (this isn't our view of biology - but makes simulations simpler)
+* explain how to compile or download pre-generated binary
 
 ```
 SIMU v0.9.0 - library for simulation of GWAS summary statistics:
