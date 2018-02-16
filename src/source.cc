@@ -77,6 +77,7 @@ struct SimuOptions {
     num_variants = 0;
     boost::posix_time::ptime const time_epoch(boost::gregorian::date(1970, 1, 1));
     seed = (boost::posix_time::microsec_clock::local_time() - time_epoch).ticks();
+    verbose = false;
   }
 };
 
@@ -1008,26 +1009,35 @@ main(int argc, char *argv[])
       ("cc", po::bool_switch(&simu_options.cc)->default_value(false), "simulate case/control trait")
       ("num-traits", po::value(&simu_options.num_traits)->default_value(1), "number of traits (either 1 or 2 traits are supported)")
       ("k", po::value< std::vector<float> >(&simu_options.k)->multitoken(), "prevalence for case/control traits, by default 0.1; one value per trait")
-      ("ncas", po::value< std::vector<int> >(&simu_options.ncas)->multitoken(), "number of cases, by default N*k; one value per trait")
-      ("ncon", po::value< std::vector<int> >(&simu_options.ncon)->multitoken(), "number of controls, by default N*(1-k); one value per trait")
+      ("ncas", po::value< std::vector<int> >(&simu_options.ncas)->multitoken(), "number of cases, by default N*k, where N is sample size; one value per trait")
+      ("ncon", po::value< std::vector<int> >(&simu_options.ncon)->multitoken(), "number of controls, by default N*(1-k), where N is sample size; one value per trait")
       ("hsq", po::value< std::vector<float> >(&simu_options.hsq)->multitoken(), "heritability, by default 0.7; one value per trait")
       ("num-components", po::value(&simu_options.num_components)->default_value(1), "number of components in the mixture")      
       ("causal-pi", po::value< std::vector<float> >(&simu_options.causal_pi)->multitoken(), "proportion of causal variants; by default 0.001; one value per mixture component")
       ("causal-n", po::value< std::vector<int> >(&simu_options.causal_n)->multitoken(), "number of causal variants (alternative to --causal-pi option); one value per mixture component")
-      ("causal-variants", po::value< std::vector<std::string> >(&simu_options.causal_variants)->multitoken(), "file with a list of causal variants and, optionally, their effect sizes (alternative to --causal-pi option); one file per mixture component")
+      ("causal-variants", po::value< std::vector<std::string> >(&simu_options.causal_variants)->multitoken(),
+       "file with a list of causal variants and, optionally, their effect sizes; "
+       "one file per mixture component. "
+       "This is an alternative option to --causal-pi and --causal-n. " 
+       "See README.md file for detailed description of file formats.")
       ("causal-regions", po::value< std::vector<std::string> >(&simu_options.causal_regions)->multitoken(),
        "file with a list of non-overlapping regions to distribute causal variants. "
-       "Regions must be defined as a list of variant names (e.g. RS numbers). "
+       "Regions must be defined as a list of variant names (e.g. RS numbers, one value per line). "
        "Supplements --causal-pi or --causal-n options; can not be used together with --causal-variants option. "
        "One file per mixture component")
       ("trait1-sigsq", po::value< std::vector<float> >(&simu_options.trait1_sigsq)->multitoken(), "variance of effect sizes for trait1 per causal marker; by default 1.0; one value per mixture component")
       ("trait2-sigsq", po::value< std::vector<float> >(&simu_options.trait2_sigsq)->multitoken(), "variance of effect sizes for trait2 per causal marker; by default 1.0; one value per mixture component")
       ("gcta-sigma", po::bool_switch(&simu_options.gcta_sigma)->default_value(false), "draw effect sizes with variance inversely proportional to sqrt(2*p(1-p)), where p is allele frequency.")
-      ("norm-effect", po::bool_switch(&simu_options.norm_effect)->default_value(false), "report effect sizes w.r.t. normalized genotypes (e.i. 0,1,2 genotypes devided by sqrt(2*p(1-p))). Default is to report effect size w.r.t. additively coded (0,1,2) genotypes.")
+      ("norm-effect", po::bool_switch(&simu_options.norm_effect)->default_value(false),
+       "report effect sizes w.r.t. normalized genotypes (e.i. additively coded 0,1,2 genotypes devided by sqrt(2*p(1-p)), where p is allele frequency). "
+       "Default behavior without --norm-effect is to report effect size w.r.t. additively coded 0,1,2 genotypes.")
       ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "coefficient of genetic correlation; by default 0.0; one value per mixture component")
-      ("out", po::value(&simu_options.out)->default_value("simu"), "prefix of the output file; will generate .pheno file (phenotypes) and .1.causals file (one per trait, list MarkerName for all causal variants and their effect sizes.")
       ("seed", po::value(&simu_options.seed), "seed for random numbers generator (default is time-dependent seed)")
-      ("verbose", po::bool_switch(&simu_options.verbose)->default_value(false), "enable verbose logging")
+      ("out", po::value(&simu_options.out)->default_value("simu"),
+       "prefix of the output files; will generate .pheno file containing synthesized phenotypes; "
+      "and .*.causals files (one file per trait) containing lists of causal variants and their effect sizes for each component in the mixture. "
+      "See README.md file for detailed description of file formats.")
+      // ("verbose", po::bool_switch(&simu_options.verbose)->default_value(false), "enable verbose logging")
     ;
 
     // expand documentation - format of output files
@@ -1045,6 +1055,33 @@ main(int argc, char *argv[])
     bool show_help = (vm.count("help") > 0);
     if (show_help) {
       std::cerr << po_options;
+      std::cerr << "\nExamples:\n";
+      std::cerr << std::endl;
+      std::cerr << "* Simulate a quantitative trait with 1% causal markers, with the heritability of 0.5:\n";
+      std::cerr << "  simu --bfile test --qt --causal-pi 0.01 --hsq 0.5\n";
+      std::cerr << std::endl;
+      std::cerr << "* Simulate a quantitative trait as above, using simulation model from GCTA GWAS Simulation:\n";
+      std::cerr << "  simu --bfile test --qt --causal-pi 0.01 --hsq 0.5 --gcta-sigma --norm-effect \n";
+      std::cerr << std::endl;
+      std::cerr << "* Simulate two quantitative traits with genetic correlation of 0.8 and the heritabilities of 0.2 and 0.6:\n";
+      std::cerr << "  simu --bfile test --qt --causal-pi 0.01 --num-traits 2 --hsq 0.2 0.6 --rg 0.8 \n";
+      std::cerr << std::endl;
+      std::cerr << "* Simulate 500 cases and 500 controls with the heritability of liability of 0.5 and disease prevalence of 0.1:\n";
+      std::cerr << "  simu --bfile test --cc --k 0.1 --ncas 500 --ncon 500 --causal-pi 0.01 --hsq 0.5 \n";
+      std::cerr << std::endl;
+      std::cerr << "* Simulate two quantitative traits with three genetic components:\n";
+      std::cerr << "      (1) causal variants specific to the first trait, \n";
+      std::cerr << "      (2) causal variants specific to the second trait, \n";
+      std::cerr << "      (3) shared causal variants with correlation of 0.8: \n";
+      std::cerr << "  simu --bfile test --qt --num-traits 2 --hsq 0.2 0.6  --num-components 3 \\ \n";
+      std::cerr << "       --causal-pi 0.01 0.01 0.01 --trait1-sigsq 1 0 1 --trait2-sigsq 0 1 1 --rg 0 0 0.8 \n";
+      std::cerr << std::endl;
+      std::cerr << "* Simulate a quantitative trait with specific location of causal markers:\n";
+      std::cerr << "  simu --bfile test --qt --causal-variants causal.snplist --hsq 0.5\n";
+      std::cerr << std::endl;
+      std::cerr << "* Simulate a quantitative trait where n=10 causal markers are randomly distributed within specific region:\n";
+      std::cerr << "  simu --bfile test --qt --causal-n 10 --causal-regions snplist --hsq 0.5\n";
+      std::cerr << std::endl;
       exit(EXIT_FAILURE);
     }
 
