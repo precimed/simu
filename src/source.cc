@@ -11,6 +11,7 @@
 #include <vector>
 #include <fstream>
 #include <limits>
+#include <map>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>
@@ -45,16 +46,20 @@ struct SimuOptions {
   std::vector<int> ncon;
   std::vector<float> hsq;
   int num_components;
-  std::vector<std::string> causal_variants;  // not implemented (file with causal variants per component)
-  std::vector<int> causal_n;                 // not implemented
+  std::vector<std::string> causal_variants;
+  std::vector<int> causal_n;
   std::vector<float> causal_pi;
-  std::vector<std::string> causal_regions;   // not implemented (file which restrict where causal variants may be distributed)
+  std::vector<std::string> causal_regions;  // not implemented
   std::vector<float> trait1_sigsq;
   std::vector<float> trait2_sigsq;
   std::vector<float> rg;
   bool gcta_sigma;
+  
+  // see documentation at github about --norm-effect flag;
+  // however, beware that everywhere in this file, regardless of this flag, the computations are done w.r.t. 0-1-2 genotypes (additively coded).
+  // it implies that if user provides effect sizes, and --norm-effect is on, we first convert user effect sizes into effect sizes w.r.t. 0-1-2, and convert them back into per-normalized-genotypes effect sizes before saving the resulting .causals file 
   bool norm_effect;
-  std::string keep;                          // not implemented
+
   std::string out;
   boost::int64_t seed;
   bool verbose;
@@ -206,9 +211,10 @@ class PioFile {
 
 class PioFiles {
  public:
-  PioFiles() { cur_file_ = 0; }
+  PioFiles() { cur_file_ = 0; num_variants_ = 0; }
   void push_back(std::shared_ptr<PioFile> pio_file) {
     pio_files_.push_back(pio_file);
+    num_variants_ += pio_file->num_loci();
   }
 
   pio_status_t skip_row() {
@@ -261,10 +267,101 @@ class PioFiles {
     return pio_files_[cur_file_]->get_cur_locus();
   }
 
+  void find_variant_index_map() {
+    if (!snp_to_id_.empty())
+      throw(std::runtime_error("internal error - find_variant_index_map must be called once"));
+
+    for (int variant_index = 0; variant_index < num_variants_; variant_index++) {
+      pio_locus_t* locus = this->get_locus(variant_index);
+      if (locus == nullptr) {
+        std::stringstream ss; ss << "ERROR: unable to read locus with index " << variant_index;
+        throw(std::runtime_error(ss.str()));
+      }
+      auto retval = snp_to_id_.insert({locus->name, variant_index});
+      if (retval.second == false) {
+        std::stringstream ss; ss << "ERROR: duplicated variant name: " << locus->name;
+        throw(std::runtime_error(ss.str()));
+      }
+    }
+  }
+
+  int get_locus_id(std::string locus_name) {
+    auto it = snp_to_id_.find(locus_name);
+    if (it == snp_to_id_.end()) {
+      std::stringstream ss; ss << "ERROR: locus with name " << locus_name << " does not exist in the input; check your --bfile and/or --causal-variants, --causal-regions arguments";
+      throw(std::runtime_error(ss.str()));
+    }
+    return it->second;
+  }
+
+  int num_variants() const { return num_variants_; }
+
  private:
   std::vector<std::shared_ptr<PioFile>> pio_files_;
+  std::map<std::string, int> snp_to_id_;
   int cur_file_;
+  int num_variants_;
 };
+
+void read_causal_variants_file(std::string file, Logger* log,
+                               PioFiles* pio_files,
+                               std::vector<int>* variant_indices,
+                               std::vector<double>* effect1_per_variant,
+                               std::vector<double>* effect2_per_variant) {
+  std::ifstream infile(file);
+  std::string line;
+  variant_indices->clear(); 
+  if (effect1_per_variant != nullptr) effect1_per_variant->clear();
+  if (effect2_per_variant != nullptr) effect2_per_variant->clear();
+  int num_tokens = -1;
+  int line_num = 1;
+  if (log != nullptr) (*log) << "Reading '" << file << "'... ";
+  while (std::getline(infile, line))
+  {
+    std::vector<std::string> tokens;
+    const std::string separators = " \t\n\r";
+    boost::trim_if(line, boost::is_any_of(separators));
+    boost::split(tokens, line, boost::is_any_of(separators), boost::token_compress_on);
+    if (line.empty() || tokens.size() == 0) continue;
+    if (num_tokens == -1) num_tokens = tokens.size();
+    if (tokens.size() != num_tokens) {
+      std::stringstream ss; ss << "ERROR: failed to parse line " << line_num << " from '" << file << "', invalid number of tokens (" << tokens.size() << " found, " << num_tokens << " expected)";
+      throw std::runtime_error(ss.str()); 
+    }
+
+    int variant_index = pio_files->get_locus_id(tokens[0]);
+    if ((variant_index == -1) || (variant_index > pio_files->num_variants())) {
+      std::stringstream ss; ss << "ERROR: can not find variant '" << tokens[0] << "' in input --bfile / --bfile-chr";
+      throw std::runtime_error(ss.str()); 
+    }
+
+    double effect1, effect2;
+    try {
+      if (tokens.size() > 1) effect1 = boost::lexical_cast<double>(tokens[1]);
+    } catch(...) {
+      std::stringstream ss; ss << "ERROR: failed to parse line " << line_num << " from '" << file << "', effect size '" << tokens[1] << "' is not a number";
+      throw std::runtime_error(ss.str());
+    }
+
+    try {
+      if (tokens.size() > 2) effect2 = boost::lexical_cast<double>(tokens[2]);
+    } catch(...) {
+      std::stringstream ss; ss << "ERROR: failed to parse line " << line_num << " from '" << file << "', effect size '" << tokens[2] << "' is not a number";
+      throw std::runtime_error(ss.str());
+    }
+
+    variant_indices->push_back(variant_index);
+    if ((effect1_per_variant != nullptr) && (tokens.size() > 1)) effect1_per_variant->push_back(effect1);
+    if ((effect2_per_variant != nullptr) && (tokens.size() > 2)) effect2_per_variant->push_back(effect2);
+    line_num++;
+  }
+
+  if (variant_indices->empty()) {
+    std::stringstream ss; ss << "ERROR: '" << file << "' is empty or contains no variants";
+    throw std::runtime_error(ss.str());
+  }
+  if (log != nullptr) (*log) << variant_indices->size() << " variants found.\n";
+}
 
 void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& log,
                       PioFiles* pio_files) {
@@ -302,9 +399,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     simu_options.out_causals.push_back(simu_options.out + "." + boost::lexical_cast<std::string>(i+1) + ".causals");
 
   if ( boost::filesystem::exists( simu_options.out_pheno ) )
-  {
     log << "WARNING: Target file " << simu_options.out_pheno << " already exists and will be overwritten\n"; 
-  }
 
   if (simu_options.qt && (vm.count("k") > 0 || vm.count("ncas") > 0 || vm.count("ncon") > 0)) {
     log << "WARNING: Options --k, --ncas, --ncon are not relevant to --qt, and will be ignored\n";
@@ -346,13 +441,38 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
   for (auto val: simu_options.hsq) if (val < 0 || val > 1)
     throw std::invalid_argument(std::string("ERROR: Heritability --hsq must be between 0.0 and 1.0"));
 
-  // initialize default value for --causal-pi and check for out of range values
+  // initialize default value for --causal-pi, --causal-n, --causal-variants and check for out of range values
   if (!simu_options.causal_pi.empty() && (simu_options.causal_pi.size() != simu_options.num_components))
     throw std::invalid_argument(std::string("ERROR: Number of --causal-pi values does not match the number of components"));
-  if (simu_options.causal_pi.empty())
+  if (!simu_options.causal_n.empty() && (simu_options.causal_n.size() != simu_options.num_components))
+    throw std::invalid_argument(std::string("ERROR: Number of --causal-n values does not match the number of components"));
+  if (!simu_options.causal_variants.empty() && (simu_options.causal_variants.size() != simu_options.num_components))
+    throw std::invalid_argument(std::string("ERROR: Number of --causal-variants values does not match the number of components"));
+  if (((int)simu_options.causal_pi.empty() + (int)simu_options.causal_n.empty() + (int)simu_options.causal_variants.empty()) < 2)
+    throw std::invalid_argument(std::string("ERROR: At most one of --causal-pi, --causal-n, --causal-variants options must be used"));
+  if (simu_options.causal_pi.empty() && simu_options.causal_n.empty() && simu_options.causal_variants.empty())
     for (int i = 0; i < simu_options.num_components; i++) simu_options.causal_pi.push_back(DEFAULT_CAUSAL_PI);
   for (auto val: simu_options.causal_pi) if (val <= 0 || val >= 1)
     throw std::invalid_argument(std::string("ERROR: --causal-pi values must be between 0.0 and 1.0"));
+  for (auto val: simu_options.causal_n) if (val <= 0)
+    throw std::invalid_argument(std::string("ERROR: --causal-n values must be a positive"));
+
+  if (!simu_options.causal_regions.empty() && !simu_options.causal_variants.empty()) {
+    log << "WARNING: Option --causal-regions can not be used together with --causal-variants, and will be ignored\n";
+    simu_options.causal_regions.clear();
+  }  
+  if (!simu_options.causal_regions.empty() && (simu_options.causal_regions.size() != simu_options.num_components))
+    throw std::invalid_argument(std::string("ERROR: Number of --causal-regions values does not match the number of components"));
+
+  for (auto val: simu_options.causal_regions) if (!boost::filesystem::exists( val )) {
+    std::stringstream ss; ss << "ERROR: input file " << val << " does not exist";
+    throw std::runtime_error(ss.str());
+  }
+
+  for (auto val: simu_options.causal_variants) if (!boost::filesystem::exists( val )) {
+    std::stringstream ss; ss << "ERROR: input file " << val << " does not exist";
+    throw std::runtime_error(ss.str());
+  } 
 
   // initialize default value for --trait1-sigsq and check for out of range values
   {
@@ -400,6 +520,16 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
       throw std::runtime_error("ERROR: Inconsistent number of subjects in --bfile-chr input");
     simu_options.num_variants += pio_file->num_loci();
   }
+  simu_options.num_variants = pio_files->num_variants();
+  if (simu_options.bfiles.size() > 1)
+    log << "Found " << simu_options.num_variants << " variants in total.\n";
+
+  if (!simu_options.causal_variants.empty() || !simu_options.causal_regions.empty()) {
+    // the PioFiles::snp_to_id_ map will be used only if we need to look up variants by their RS name,
+    // e.i. if user specified --causal-variants or --causal-regions flags.
+    log << "Validate that all variants have unique name (required for --causal-variants and --causal-regions options)...\n";
+    pio_files->find_variant_index_map();
+  }
 
   // Initialize or validate ncas/ncon parameters
   if (simu_options.cc) {
@@ -419,10 +549,18 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     }
   }
 
-  int num_causal_variants = 0;
-  for (int i = 0; i < simu_options.num_components; i++) num_causal_variants += static_cast<int>(simu_options.causal_pi[i] * simu_options.num_variants);
-  if (num_causal_variants > simu_options.num_variants)
-    throw std::invalid_argument("ERROR: sum of --causal-pi must be less than 1.0");
+  if (!simu_options.causal_pi.empty()) {
+    for (int i = 0; i < simu_options.num_components; i++)
+      simu_options.causal_n.push_back(static_cast<int>(simu_options.causal_pi[i] * simu_options.num_variants));
+    simu_options.causal_pi.clear();
+  }
+
+  if (!simu_options.causal_n.empty()) {
+    int num_causal_variants = 0;
+    for (int i = 0; i < simu_options.num_components; i++) num_causal_variants += simu_options.causal_n[i];
+    if (num_causal_variants > simu_options.num_variants)
+      throw std::invalid_argument("ERROR: sum of --causal-pi must be less than 1.0, or sum of --causal-n must be less than number of variants present in the input file.");
+  }
 
   // if (vm.count("seed") == 0)
   //  log << "--seed option was set to " << simu_options.seed << "\n";
@@ -452,11 +590,13 @@ void describe_simu_options(SimuOptions& s, Logger& log) {
   if (s.verbose) log << "\t--verbose \\\n";
   if (s.gcta_sigma) log << "\t--gcta-sigma \\\n";
   if (s.norm_effect) log << "\t--norm-effect \\\n";
-  if (!s.keep.empty()) log << "\t--keep " << s.keep << " \\\n";
   log << "\n";
 }
 
-void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, std::vector<int>* component_per_variant) {
+void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, Logger& log, PioFiles* pio_files,
+                  std::vector<int>* component_per_variant,
+                  std::vector<double>* effect1_per_variant,
+                  std::vector<double>* effect2_per_variant) {
   // generate vector of length simu_options.num_varinats
   // elements in the vector can be
   //    -1 means "not causal in either component", or 
@@ -465,17 +605,60 @@ void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, std::vec
   component_per_variant->clear();  
   for (int i = 0; i < simu_options.num_variants; i++) component_per_variant->push_back(-1);
 
-  std::vector<int> variant_indices_permutation;
-  for (int i = 0; i < simu_options.num_variants; i++) variant_indices_permutation.push_back(i);
-  
-  boost::variate_generator<boost::mt19937&, boost::uniform_int<> > random_integer(rng, boost::uniform_int<>());
-  std::random_shuffle(variant_indices_permutation.begin(), variant_indices_permutation.end(), random_integer);
+  if (!simu_options.causal_variants.empty()) {
+    // user explicitly specified causal variants
+    bool effect_sizes_from_file = false;   // whether variants had effect size provided, or not
 
-  int permuted_index = 0;
-  for (int component_index = 0; component_index < simu_options.num_components; component_index++) {
-    int num_causals_per_component = static_cast<int>(simu_options.causal_pi[component_index] * simu_options.num_variants);
-    for (int causal_index = 0; causal_index < num_causals_per_component; causal_index++, permuted_index++) {
-      component_per_variant->at(variant_indices_permutation[permuted_index]) = component_index;
+    for (int component_index = 0; component_index < simu_options.num_components; ++component_index) {
+      std::vector<int> variant_indices;
+      std::vector<double> causal_effect1, causal_effect2;
+      read_causal_variants_file(simu_options.causal_variants[component_index], &log, pio_files, &variant_indices, &causal_effect1, &causal_effect2);
+
+      if (component_index == 0) {
+        if (!causal_effect1.empty()) for (int i = 0; i < simu_options.num_variants; i++) effect1_per_variant->push_back(0.0);
+        if (!causal_effect2.empty()) for (int i = 0; i < simu_options.num_variants; i++) effect2_per_variant->push_back(0.0);
+        effect_sizes_from_file = !causal_effect1.empty();
+
+        if (effect_sizes_from_file && causal_effect2.empty() && (simu_options.num_traits == 2)) {
+          std::stringstream ss; ss << "ERROR: issue with --causal-variants files; effect sizes are not provided for the second trait, file '" << simu_options.causal_variants[0] << "'";
+          throw std::runtime_error(ss.str());
+        }
+
+        if (effect_sizes_from_file && !causal_effect2.empty() && (simu_options.num_traits == 1)) {
+          log << "WARNING: minor issue with --causal-variants files; effect sizes provided for the second trait will be ignored, '" << simu_options.causal_variants[0] << "'\n";
+        }
+      }
+
+      if (effect_sizes_from_file && causal_effect1.empty()) {
+        std::stringstream ss; ss << "ERROR: issue with --causal-variants files; effect sizes are present in '" << simu_options.causal_variants[0] << "' but not in '" << simu_options.causal_variants[component_index] << "'";
+        throw std::runtime_error(ss.str());
+      }
+
+      for (int i = 0; i < variant_indices.size(); i++) {
+        int variant_index = variant_indices[i];
+        if (component_per_variant->at(variant_index) != -1) {
+          std::stringstream ss; ss << "ERROR: Variant '" << pio_files->get_locus(variant_index)->name << "' is duplicated in --causal-variants input";
+          throw std::runtime_error(ss.str());
+        }
+
+        component_per_variant->at(variant_index) = component_index;
+        if (effect_sizes_from_file && !causal_effect1.empty()) effect1_per_variant->at(variant_index) = causal_effect1[i];
+        if (effect_sizes_from_file && !causal_effect2.empty()) effect2_per_variant->at(variant_index) = causal_effect2[i];
+      }
+    }
+  } else {
+    // user requested to randomly distribute causal variants
+    std::vector<int> variant_indices_permutation;
+    for (int i = 0; i < simu_options.num_variants; i++) variant_indices_permutation.push_back(i);
+    
+    boost::variate_generator<boost::mt19937&, boost::uniform_int<> > random_integer(rng, boost::uniform_int<>());
+    std::random_shuffle(variant_indices_permutation.begin(), variant_indices_permutation.end(), random_integer);
+
+    int permuted_index = 0;
+    for (int component_index = 0; component_index < simu_options.num_components; component_index++) {
+      for (int causal_index = 0; causal_index < simu_options.causal_n[component_index]; causal_index++, permuted_index++) {
+        component_per_variant->at(variant_indices_permutation[permuted_index]) = component_index;
+      }
     }
   }
 }
@@ -723,6 +906,8 @@ void save_causals_file(const SimuOptions& simu_options,
   }
 }
 
+
+
 int
 main(int argc, char *argv[])
 {
@@ -746,6 +931,13 @@ main(int argc, char *argv[])
       ("hsq", po::value< std::vector<float> >(&simu_options.hsq)->multitoken(), "heritability, by default 0.7; one value per trait")
       ("num-components", po::value(&simu_options.num_components)->default_value(1), "Number of components in the mixture")      
       ("causal-pi", po::value< std::vector<float> >(&simu_options.causal_pi)->multitoken(), "proportion of causal variants; by default 0.001; one value per mixture component")
+      ("causal-n", po::value< std::vector<int> >(&simu_options.causal_n)->multitoken(), "number of causal variants (alternative to --causal-pi option); one value per mixture component")
+      ("causal-variants", po::value< std::vector<std::string> >(&simu_options.causal_variants)->multitoken(), "file with a list of causal variants and, optionally, their effect sizes (alternative to --causal-pi option); one file per mixture component")
+      ("causal-regions", po::value< std::vector<std::string> >(&simu_options.causal_regions)->multitoken(),
+       "file with a list of non-overlapping regions to distribute causal variants. "
+       "Regions must be defined as a list of variant names (e.g. RS numbers). "
+       "Supplements --causal-pi or --causal-n options; can not be used together with --causal-variants option. "
+       "One file per mixture component")
       ("trait1-sigsq", po::value< std::vector<float> >(&simu_options.trait1_sigsq)->multitoken(), "variance of effect sizes for trait1 per causal marker; by default 1.0; one value per mixture component")
       ("trait2-sigsq", po::value< std::vector<float> >(&simu_options.trait2_sigsq)->multitoken(), "variance of effect sizes for trait2 per causal marker; by default 1.0; one value per mixture component")
       ("gcta-sigma", po::bool_switch(&simu_options.gcta_sigma)->default_value(false), "draw effect sizes with variance inversely proportional to sqrt(2*p(1-p)), where p is allele frequency.")
@@ -788,32 +980,57 @@ main(int argc, char *argv[])
   
       // Find component for causal variants
       std::vector<int> component_per_variant;
-      find_causals(simu_options, rng, &component_per_variant);
+      std::vector<double> effect1_per_variant, effect2_per_variant;
+      find_causals(simu_options, rng, log, &pio_files, &component_per_variant, &effect1_per_variant, &effect2_per_variant);
 
       log << "Calculate allele frequencies (for causal markers only)... \n";
       std::vector<double> freq_vec;  // vector of allele frequency; NB! vector has -1 for non-causal variants, as we don't need them anywhere later;
       find_freq(simu_options, component_per_variant, &pio_files, &freq_vec);
 
-      // Find effect sizes for causal variants (one per trait)
-      std::vector<double> effect1_per_variant, effect2_per_variant;
-      if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
-      else find_effect_sizes_bivariate(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);
-  
-      // Apply --gcta-sigma flag
-      if (simu_options.gcta_sigma) {
-        log << "Apply --gcta-sigma option to effect sizes...\n";
-        for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
-          if (component_per_variant[variant_index] == -1) continue;
-          double freq = freq_vec[variant_index];
-          double het = fabs(2 * freq * (1-freq));
-          if (het < FLT_EPSILON) {
-            pio_locus_t* locus = pio_files.get_locus(variant_index);
-            std::stringstream ss; ss << "Causal variant " << ((locus == nullptr) ? "rs???" : locus->name) << " has zero frequency. Can not apply --gcta-sigma.";
-            throw std::runtime_error(ss.str());
-          }
+      // Find effect sizes for causal variants (one per trait) --- unless user provided values in --causal-variants file
+      if (effect1_per_variant.empty()) {
+        log << "Generate effect sizes from normal distribution...\n";
+        if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
+        else find_effect_sizes_bivariate(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);
 
-          effect1_per_variant[variant_index] /= sqrt(het);
-          if (simu_options.num_traits==2) effect2_per_variant[variant_index] /= sqrt(het);
+        // Apply --gcta-sigma flag
+        if (simu_options.gcta_sigma) {
+          log << "Apply --gcta-sigma option to effect sizes...\n";
+          for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
+            if (component_per_variant[variant_index] == -1) continue;
+            double freq = freq_vec[variant_index];
+            double het = fabs(2 * freq * (1-freq));
+            if (het < FLT_EPSILON) {
+              pio_locus_t* locus = pio_files.get_locus(variant_index);
+              std::stringstream ss; ss << "Causal variant " << ((locus == nullptr) ? "rs???" : locus->name) << " has zero frequency. Can not apply --gcta-sigma.";
+              throw std::runtime_error(ss.str());
+            }
+
+            effect1_per_variant[variant_index] /= sqrt(het);
+            if (simu_options.num_traits==2) effect2_per_variant[variant_index] /= sqrt(het);
+          }
+        }
+      } else {
+        log << "Use effect sizes provided in --causal-variants file.\n";
+        if (simu_options.gcta_sigma || (vm.count("trait1-sigsq") > 0) || (vm.count("trait2-sigsq") > 0) || (vm.count("rg") > 0))
+          log << "WARNING: Options --gcta-sigma, --trait1-sigsq, --trait2-sigsq, --rg are irrelevant and will be ignored.\n";
+        if (simu_options.norm_effect) {
+          log << "NB! due to --norm-effect option, all effect sizes from --causal-variants will be treated as per-normalized-genotypes effect sizes\n";
+          for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
+            if (component_per_variant[variant_index] == -1) continue;
+            double freq = freq_vec[variant_index];
+            double het = fabs(2 * freq * (1-freq));
+            if (het < FLT_EPSILON) {
+              pio_locus_t* locus = pio_files.get_locus(variant_index);
+              std::stringstream ss; ss << "Causal variant " << ((locus == nullptr) ? "rs???" : locus->name) << " has zero frequency. Can not apply --norm-effect.";
+              throw std::runtime_error(ss.str());
+            }
+
+            effect1_per_variant[variant_index] /= sqrt(het);
+            if (simu_options.num_traits==2) effect2_per_variant[variant_index] /= sqrt(het);
+          }
+        } else {
+          log << "NB! without --norm-effect option all effect sizes from --causal-variants will be treated w.r.t. additive coded 0,1,2 genotypes\n";
         }
       }
 
