@@ -52,7 +52,8 @@ struct SimuOptions {
   std::vector<float> trait1_sigsq;
   std::vector<float> trait2_sigsq;
   std::vector<float> rg;
-  bool gcta_sigma;                           // not implemented (support gcta mode with effect sizes inversely proportional to maf)
+  bool gcta_sigma;
+  bool norm_effect;
   std::string keep;                          // not implemented
   std::string out;
   boost::int64_t seed;
@@ -342,7 +343,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
   // inidialize default value for hsq (heritability) and check for out of range values
   if (simu_options.hsq.empty())
     for (int i = 0; i < simu_options.num_traits; i++) simu_options.hsq.push_back(DEFAULT_HSQ);
-  for (auto val: simu_options.hsq) if (val <= 0 || val >= 1)
+  for (auto val: simu_options.hsq) if (val < 0 || val > 1)
     throw std::invalid_argument(std::string("ERROR: Heritability --hsq must be between 0.0 and 1.0"));
 
   // initialize default value for --causal-pi and check for out of range values
@@ -450,6 +451,7 @@ void describe_simu_options(SimuOptions& s, Logger& log) {
   log << "\t--seed " << s.seed << " \\\n";
   if (s.verbose) log << "\t--verbose \\\n";
   if (s.gcta_sigma) log << "\t--gcta-sigma \\\n";
+  if (s.norm_effect) log << "\t--norm-effect \\\n";
   if (!s.keep.empty()) log << "\t--keep " << s.keep << " \\\n";
   log << "\n";
 }
@@ -701,6 +703,13 @@ void save_causals_file(const SimuOptions& simu_options,
         throw(std::runtime_error(ss.str()));
       }
 
+      double effect = effect_per_variant[variant_index];
+      if (simu_options.norm_effect) {
+        double freq = freq_vec[variant_index];
+        double het = fabs(2 * freq * (1-freq));
+        effect *= sqrt(het);
+      }
+
       file << locus->name << "\t";
       file << static_cast<int>(locus->chromosome) << "\t";
       file << locus->bp_position << "\t";
@@ -708,7 +717,7 @@ void save_causals_file(const SimuOptions& simu_options,
       file << locus->allele2 << "\t";
       file << freq_vec[variant_index];
       for (int i = 0; i < simu_options.num_components; i++)
-        file << "\t" << ((i == component_per_variant[variant_index]) ? effect_per_variant[variant_index] : 0.0);
+        file << "\t" << ((i == component_per_variant[variant_index]) ? effect : 0.0);
       file << "\n";
     }
   }
@@ -739,7 +748,9 @@ main(int argc, char *argv[])
       ("causal-pi", po::value< std::vector<float> >(&simu_options.causal_pi)->multitoken(), "proportion of causal variants; by default 0.001; one value per mixture component")
       ("trait1-sigsq", po::value< std::vector<float> >(&simu_options.trait1_sigsq)->multitoken(), "variance of effect sizes for trait1 per causal marker; by default 1.0; one value per mixture component")
       ("trait2-sigsq", po::value< std::vector<float> >(&simu_options.trait2_sigsq)->multitoken(), "variance of effect sizes for trait2 per causal marker; by default 1.0; one value per mixture component")
-      ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "coefficient of genetic correlation; by default 0.0; one value per mixture component")
+      ("gcta-sigma", po::bool_switch(&simu_options.gcta_sigma)->default_value(false), "draw effect sizes with variance inversely proportional to sqrt(2*p(1-p)), where p is allele frequency.")
+      ("norm-effect", po::bool_switch(&simu_options.norm_effect)->default_value(false), "report effect sizes w.r.t. normalized genotypes (e.i. 0,1,2 genotypes devided by sqrt(2*p(1-p))). Default is to report effect size w.r.t. additively coded (0,1,2) genotypes.")
+      ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "[TBD: support negative values] coefficient of genetic correlation; by default 0.0; one value per mixture component")
       ("out", po::value(&simu_options.out)->default_value("simu"), "Prefix of the output file; will generate .pheno file (phenotypes) and .1.causals file (one per trait, list MarkerName for all causal variants and their effect sizes.")
       ("seed", po::value(&simu_options.seed), "Seed for random numbers generator (default is time-dependent seed)")
       ("verbose", po::bool_switch(&simu_options.verbose)->default_value(false), "enable verbose logging")
@@ -788,6 +799,24 @@ main(int argc, char *argv[])
       if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
       else find_effect_sizes_bivariate(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);
   
+      // Apply --gcta-sigma flag
+      if (simu_options.gcta_sigma) {
+        log << "Apply --gcta-sigma option to effect sizes...\n";
+        for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
+          if (component_per_variant[variant_index] == -1) continue;
+          double freq = freq_vec[variant_index];
+          double het = fabs(2 * freq * (1-freq));
+          if (het < FLT_EPSILON) {
+            pio_locus_t* locus = pio_files.get_locus(variant_index);
+            std::stringstream ss; ss << "Causal variant " << ((locus == nullptr) ? "rs???" : locus->name) << " has zero frequency. Can not apply --gcta-sigma.";
+            throw std::runtime_error(ss.str());
+          }
+
+          effect1_per_variant[variant_index] /= sqrt(het);
+          if (simu_options.num_traits==2) effect2_per_variant[variant_index] /= sqrt(het);
+        }
+      }
+
       log << "Calculate phenotypes... \n";
       // Find phenotypes
       std::vector<double> pheno1_per_sample, pheno2_per_sample;
