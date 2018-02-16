@@ -686,11 +686,12 @@ void save_pheno_file(const SimuOptions& simu_options, PioFiles* pio_files,
 
 void save_causals_file(const SimuOptions& simu_options,
                        const std::string& out_causal, PioFiles* pio_files,
+                       const std::vector<double>& freq_vec,
                        const std::vector<int>& component_per_variant,
                        const std::vector<double>& effect_per_variant) {
   std::ofstream file(out_causal);
-  file << "SNP\tCHR\tPOS\tA1\tA2";
-  for (int i = 0; i < simu_options.num_components; i++) file << "\tBETA_c" << i;
+  file << "SNP\tCHR\tPOS\tA1\tA2\tFRQ";
+  for (int i = 0; i < simu_options.num_components; i++) file << "\tBETA_c" << (i+1);
   file << "\n";
   for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
     if (component_per_variant[variant_index] != -1) {
@@ -704,7 +705,8 @@ void save_causals_file(const SimuOptions& simu_options,
       file << static_cast<int>(locus->chromosome) << "\t";
       file << locus->bp_position << "\t";
       file << locus->allele1 << "\t";
-      file << locus->allele2;
+      file << locus->allele2 << "\t";
+      file << freq_vec[variant_index];
       for (int i = 0; i < simu_options.num_components; i++)
         file << "\t" << ((i == component_per_variant[variant_index]) ? effect_per_variant[variant_index] : 0.0);
       file << "\n";
@@ -809,8 +811,8 @@ main(int argc, char *argv[])
       // Save causals to output files
       log << "Save causal variants and their effect sizes to "
           << simu_options.out << ((simu_options.num_traits==2) ? ".*" : ".1") << ".causals...\n";
-      save_causals_file(simu_options, simu_options.out_causals[0], &pio_files, component_per_variant, effect1_per_variant);
-      if (simu_options.num_traits==2) save_causals_file(simu_options, simu_options.out_causals[1], &pio_files, component_per_variant, effect2_per_variant);
+      save_causals_file(simu_options, simu_options.out_causals[0], &pio_files, freq_vec, component_per_variant, effect1_per_variant);
+      if (simu_options.num_traits==2) save_causals_file(simu_options, simu_options.out_causals[1], &pio_files, freq_vec, component_per_variant, effect2_per_variant);
 
       if (simu_options.verbose) {  // debug printing
         log << "[VERBOSE] First 10 elements in resulting files:\n";
