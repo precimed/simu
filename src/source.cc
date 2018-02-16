@@ -49,7 +49,7 @@ struct SimuOptions {
   std::vector<std::string> causal_variants;
   std::vector<int> causal_n;
   std::vector<float> causal_pi;
-  std::vector<std::string> causal_regions;  // not implemented
+  std::vector<std::string> causal_regions;
   std::vector<float> trait1_sigsq;
   std::vector<float> trait2_sigsq;
   std::vector<float> rg;
@@ -452,7 +452,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     throw std::invalid_argument(std::string("ERROR: At most one of --causal-pi, --causal-n, --causal-variants options must be used"));
   if (simu_options.causal_pi.empty() && simu_options.causal_n.empty() && simu_options.causal_variants.empty())
     for (int i = 0; i < simu_options.num_components; i++) simu_options.causal_pi.push_back(DEFAULT_CAUSAL_PI);
-  for (auto val: simu_options.causal_pi) if (val <= 0 || val >= 1)
+  for (auto val: simu_options.causal_pi) if (val <= 0 || val > 1)
     throw std::invalid_argument(std::string("ERROR: --causal-pi values must be between 0.0 and 1.0"));
   for (auto val: simu_options.causal_n) if (val <= 0)
     throw std::invalid_argument(std::string("ERROR: --causal-n values must be a positive"));
@@ -527,7 +527,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
   if (!simu_options.causal_variants.empty() || !simu_options.causal_regions.empty()) {
     // the PioFiles::snp_to_id_ map will be used only if we need to look up variants by their RS name,
     // e.i. if user specified --causal-variants or --causal-regions flags.
-    log << "Validate that all variants have unique name (required for --causal-variants and --causal-regions options)...\n";
+    log << "Validate that all variants in --bfile / --bfile-chr have unique names (required for --causal-variants and --causal-regions options)...\n";
     pio_files->find_variant_index_map();
   }
 
@@ -549,17 +549,53 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     }
   }
 
-  if (!simu_options.causal_pi.empty()) {
-    for (int i = 0; i < simu_options.num_components; i++)
-      simu_options.causal_n.push_back(static_cast<int>(simu_options.causal_pi[i] * simu_options.num_variants));
-    simu_options.causal_pi.clear();
-  }
+  if (simu_options.causal_regions.empty()) {
+    if (!simu_options.causal_pi.empty()) {
+      for (int i = 0; i < simu_options.num_components; i++)
+        simu_options.causal_n.push_back(static_cast<int>(simu_options.causal_pi[i] * simu_options.num_variants));
+      simu_options.causal_pi.clear();
+    }
 
-  if (!simu_options.causal_n.empty()) {
-    int num_causal_variants = 0;
-    for (int i = 0; i < simu_options.num_components; i++) num_causal_variants += simu_options.causal_n[i];
-    if (num_causal_variants > simu_options.num_variants)
-      throw std::invalid_argument("ERROR: sum of --causal-pi must be less than 1.0, or sum of --causal-n must be less than number of variants present in the input file.");
+    if (!simu_options.causal_n.empty()) {
+      int num_causal_variants = 0;
+      for (int i = 0; i < simu_options.num_components; i++) num_causal_variants += simu_options.causal_n[i];
+      if (num_causal_variants > simu_options.num_variants)
+        throw std::invalid_argument("ERROR: sum of --causal-pi must be less than 1.0, or sum of --causal-n must be less than number of variants present in the input file.");
+    }
+  } else {
+    std::vector<int> region_per_variant;  
+    for (int i = 0; i < simu_options.num_variants; i++) region_per_variant.push_back(-1);
+
+    // Validate that --causal-regions have no overlap
+    for (int component_index = 0; component_index < simu_options.num_components; component_index++) {
+      std::vector<int> variant_indices;
+      read_causal_variants_file(simu_options.causal_regions[component_index], &log, pio_files, &variant_indices, nullptr, nullptr);
+      for (int variant_index: variant_indices) {
+        if (region_per_variant[variant_index] != -1) {
+          std::stringstream ss; ss << "ERROR: Variant '" << pio_files->get_locus(variant_index)->name << "' is duplicated in --causal-regions input; --causal-regions must be non-overlapping.";
+          throw std::runtime_error(ss.str());
+        }
+        region_per_variant[variant_index] = component_index;
+      }
+
+      if (!simu_options.causal_pi.empty()) {
+        simu_options.causal_n.push_back(static_cast<int>(simu_options.causal_pi[component_index] * variant_indices.size()));
+        if (simu_options.causal_n.back() <= 0) {
+          std::stringstream ss; ss << "--causal-pi " << simu_options.causal_pi[component_index] 
+                                   << " is too low because --causal-region " << simu_options.causal_regions[component_index]
+                                   << " contains only " <<  variant_indices.size() << " variants.";
+          throw std::runtime_error(ss.str()); 
+        }
+      }
+
+      if (simu_options.causal_n[component_index] > variant_indices.size()) {
+        std::stringstream ss; ss << "--causal-n " << simu_options.causal_n[component_index] 
+                                  << " is too high because --causal-region " << simu_options.causal_regions[component_index]
+                                  << " contains only " <<  variant_indices.size() << " variants.";
+        throw std::runtime_error(ss.str()); 
+      }
+    }
+    simu_options.causal_pi.clear();
   }
 
   // if (vm.count("seed") == 0)
@@ -648,16 +684,30 @@ void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, Logger& 
     }
   } else {
     // user requested to randomly distribute causal variants
-    std::vector<int> variant_indices_permutation;
-    for (int i = 0; i < simu_options.num_variants; i++) variant_indices_permutation.push_back(i);
-    
     boost::variate_generator<boost::mt19937&, boost::uniform_int<> > random_integer(rng, boost::uniform_int<>());
-    std::random_shuffle(variant_indices_permutation.begin(), variant_indices_permutation.end(), random_integer);
+      
+    if (!simu_options.causal_regions.empty()) {
+      // draw causal variants from user-defined regions
+      for (int component_index = 0; component_index < simu_options.num_components; component_index++) {
+        std::vector<int> variant_indices;
+        read_causal_variants_file(simu_options.causal_regions[component_index], nullptr, pio_files, &variant_indices, nullptr, nullptr);
+        std::random_shuffle(variant_indices.begin(), variant_indices.end(), random_integer);
 
-    int permuted_index = 0;
-    for (int component_index = 0; component_index < simu_options.num_components; component_index++) {
-      for (int causal_index = 0; causal_index < simu_options.causal_n[component_index]; causal_index++, permuted_index++) {
-        component_per_variant->at(variant_indices_permutation[permuted_index]) = component_index;
+        for (int causal_index = 0; causal_index < simu_options.causal_n[component_index]; causal_index++) {
+          component_per_variant->at(variant_indices[causal_index]) = component_index;
+        }
+      }
+    } else {
+      // draw causal variants randomly across all variants in --bfile / --bfile-chr
+      std::vector<int> variant_indices_permutation;
+      for (int i = 0; i < simu_options.num_variants; i++) variant_indices_permutation.push_back(i);
+      std::random_shuffle(variant_indices_permutation.begin(), variant_indices_permutation.end(), random_integer);
+
+      int permuted_index = 0;
+      for (int component_index = 0; component_index < simu_options.num_components; component_index++) {
+        for (int causal_index = 0; causal_index < simu_options.causal_n[component_index]; causal_index++, permuted_index++) {
+          component_per_variant->at(variant_indices_permutation[permuted_index]) = component_index;
+        }
       }
     }
   }
@@ -1012,6 +1062,8 @@ main(int argc, char *argv[])
         }
       } else {
         log << "Use effect sizes provided in --causal-variants file.\n";
+        if (simu_options.num_components > 1)
+          log << "WARNING: when --causal-variants contain effect sizes there is no real need to use more than one component (--num-components), isn't it so?\n";
         if (simu_options.gcta_sigma || (vm.count("trait1-sigsq") > 0) || (vm.count("trait2-sigsq") > 0) || (vm.count("rg") > 0))
           log << "WARNING: Options --gcta-sigma, --trait1-sigsq, --trait2-sigsq, --rg are irrelevant and will be ignored.\n";
         if (simu_options.norm_effect) {
