@@ -1,3 +1,10 @@
+TBD:
+
+* explain model and refer to http://cnsgenomics.com/software/gcta/#GWASSimulation
+* explain file formats, both input and output
+* explain difference between ``--gcta-sigma`` and ``--norm-effect``
+* explain causal regions feature, and why they must not overlap (this isn't our view of biology - but makes simulations simpler)
+
 ```
 SIMU v0.9.0 - library for simulation of GWAS summary statistics:
   -h [ --help ]             produce this help message
