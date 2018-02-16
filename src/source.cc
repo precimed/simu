@@ -23,6 +23,7 @@
 #include <boost/date_time/posix_time/posix_time_io.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
+#include <boost/program_options/value_semantic.hpp>
 #include <boost/filesystem.hpp>
 
 namespace po = boost::program_options;
@@ -125,6 +126,37 @@ void log_header(int argc, char *argv[], Logger &log) {
     log << argv[i] << " ";
   }
   log << "\n\n";
+}
+
+// https://stackoverflow.com/questions/4107087/accepting-negative-doubles-with-boostprogram-options
+std::vector<po::option> ignore_numbers(std::vector<std::string>& args) {
+  std::vector<po::option> result;
+  int pos = 0;
+  while(!args.empty()) {
+    const auto& arg = args[0];
+
+    bool is_number = false;
+    try {
+      boost::lexical_cast<double>(arg);
+      is_number = true;
+    } catch(...) {
+    }
+
+    if(is_number) {
+      result.push_back(po::option());
+      po::option& opt = result.back();
+
+      opt.position_key = pos++;
+      opt.value.push_back(arg);
+      opt.original_tokens.push_back(arg);
+
+      args.erase(args.begin());
+    } else {
+      break;
+    }
+  }
+
+  return result;
 }
 
 class PioFile {
@@ -992,7 +1024,7 @@ main(int argc, char *argv[])
       ("trait2-sigsq", po::value< std::vector<float> >(&simu_options.trait2_sigsq)->multitoken(), "variance of effect sizes for trait2 per causal marker; by default 1.0; one value per mixture component")
       ("gcta-sigma", po::bool_switch(&simu_options.gcta_sigma)->default_value(false), "draw effect sizes with variance inversely proportional to sqrt(2*p(1-p)), where p is allele frequency.")
       ("norm-effect", po::bool_switch(&simu_options.norm_effect)->default_value(false), "report effect sizes w.r.t. normalized genotypes (e.i. 0,1,2 genotypes devided by sqrt(2*p(1-p))). Default is to report effect size w.r.t. additively coded (0,1,2) genotypes.")
-      ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "[TBD: support negative values] coefficient of genetic correlation; by default 0.0; one value per mixture component")
+      ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "coefficient of genetic correlation; by default 0.0; one value per mixture component")
       ("out", po::value(&simu_options.out)->default_value("simu"), "prefix of the output file; will generate .pheno file (phenotypes) and .1.causals file (one per trait, list MarkerName for all causal variants and their effect sizes.")
       ("seed", po::value(&simu_options.seed), "seed for random numbers generator (default is time-dependent seed)")
       ("verbose", po::bool_switch(&simu_options.verbose)->default_value(false), "enable verbose logging")
@@ -1004,9 +1036,12 @@ main(int argc, char *argv[])
     // test and implement how to pass negative rg (since it starts with minus)
 
     po::variables_map vm;
-    store(po::command_line_parser(argc, argv).options(po_options).run(), vm);
+    po::store(po::command_line_parser(argc, argv)
+      .extra_style_parser(&ignore_numbers)
+      .options(po_options)
+      .run(), vm);
     notify(vm);
-   
+
     bool show_help = (vm.count("help") > 0);
     if (show_help) {
       std::cerr << po_options;
