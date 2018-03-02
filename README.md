@@ -31,7 +31,7 @@ Compile SIMU on your machine
 ``SIMU`` can only run on Linux / Unix and MAC, but not on Windows.
 
 * Step 1. Install prerequisites. On Ubuntu: ``sudo apt-get install git build-essential libboost-all-dev cmake``.
-* Step 2. Clone this repository: ``git clone --recurse-submodules https://github.com/precimed/massim.git``.
+* Step 2. Clone this repository: ``git clone --recurse-submodules https://github.com/precimed/simu.git``.
   Note that this repository includes submodules. If you use older version of git you may want to review [this](https://stackoverflow.com/questions/3796927/how-to-git-clone-including-submodules).
 * Step 3. Install to default location:
 ```
@@ -52,7 +52,7 @@ This will create place ``simu`` executable to your ``$HOME/bin`` folder.
 Getting help
 ------------
 
-If things didn't work, or if you have any suggestions, please submit [a new issue](https://github.com/precimed/massim/issues/new).
+If things didn't work, or if you have any suggestions, please submit [a new issue](https://github.com/precimed/simu/issues/new).
 You pull requests are also very welcome!
 
 File formats
