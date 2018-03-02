@@ -1,11 +1,112 @@
-TBD:
+SIMU simulats a GWAS based on real genotype data.
+This tool is a comprehensive extension of ``gcta --simu-qt`` and ``gcta --simu-cc`` functionality,
+described [here](http://cnsgenomics.com/software/gcta/#GWASSimulation).
+Additional features include
+* simulation of two traits (``--num-traits 2``), with given genetic correlation (``--rg``)
+* allow input genotypes to be split by chromosome (``--bfile-chr``)
+* efficient memory usage (most simulations require less than 2 GB of RAM; only ``.bim`` and ``.fam`` files are loaded into memory - ``.bed`` files are read in small chunks as needed)
 
-* explain model and refer to http://cnsgenomics.com/software/gcta/#GWASSimulation
-* explain file formats, both input and output
-* explain difference between ``--gcta-sigma`` and ``--norm-effect``
-* explain causal regions feature, and why they must not overlap (this isn't our view of biology - but makes simulations simpler)
-* explain how to compile or download pre-generated binary
+``SIMU`` implements the same model as GCTA,
+e.i. simple additive genetic model ``y=Gx+e``,
+where `y` is output phenotype, ``G`` is genotype matrix, ``x`` is vector of effect sizes, ``e`` is environmental noise.
 
+NB! Both ``SIMU`` and ``GCTA`` generate ``x`` from normal distribution.
+There is one important difference here.
+In ``GCTA``, effect sizes are in the units of normalized genotypes, e.i. 0,1,2 genotypes divided by ``sqrt(2*p(1-p))``, where p is allele frequency.
+In ``SIMU``, by default, effect sizes are in the units of additively coded 0,1,2 genotypes.
+Thus, the default behavior of ``SIMU`` is different from GCTA.
+You may force ``SIMU`` to use ``GCTA`` model by specifying ``--gcta-sigma`` flag.
+In this case you may also want to use ``--norm-effect`` flag to report effect sizes in the units of normalized genotypes.
+
+Getting started
+---------------
+
+``SUMU`` is written in `C++`, and as of today you need to compile it on your machine.
+``SIMU`` can only run on Linux / Unix and MAC, but not on Windows.
+
+* Step 1. Install prerequisites. On Ubuntu: ``sudo apt-get install git build-essential libboost-all-dev cmake``.
+* Step 2. Clone this repository: ``git clone --recurse-submodules https://github.com/precimed/massim.git``.
+  Note that this repository includes submodules. If you use older version of git you may want to review [this](https://stackoverflow.com/questions/3796927/how-to-git-clone-including-submodules).
+* Step 3. Install to default location:
+```
+mkdir build && cd build
+cmake ..
+make && sudo make install
+```
+This will create place ``simu`` executable to ``/usr/local/bin`` folder.
+* Step 3'. Install to a custom location:
+```
+mkdir build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX:PATH=~
+make && make install
+```
+This will create place ``simu`` executable to your ``$HOME/bin`` folder.
+* Step 4. Enjoy, ``simu`` is ready. Type ``simu --help`` to list available options.
+
+Getting help
+------------
+
+If things didn't work, or if you have any suggestions, please submit [a new issue](https://github.com/precimed/massim/issues/new).
+You pull requests are also very welcome!
+
+File formats
+------------
+
+``simu`` reads genotypes from plink `.bed`/`.bim`/`.fam` files.
+
+Output ``.pheno`` file contains tab-separated table, with header,
+followed by one row per individual in the same order as the input `.fam` files.
+The table contains three or four columnes.
+First two columns are family and individual indeitifier from `.fam` file,
+the remaining one or two columns contain simulated phenotypes.
+For case/control traits,
+``1`` means unaffected (control), 
+``2`` means affected (case),
+``-9`` means missing phenotype.
+Example of ``.pheno`` file for quantitative trait (`--qt`):
+```
+FID     IID     trait1
+id1_0   id2_0   -0.841613
+id1_1   id2_1   -0.0747612
+id1_2   id2_2   -2.04002
+```
+
+Output ``.causals`` file contains tab-separated file with effect sizes of causal variants.
+It contains only markers with non-zero effect size, e.i. subset of variants from input ``.bim`` file.
+First 5 columns contain information from ``.bim`` file:
+``SNP`` (marker name or RS number),
+``CHR`` (chromosome position),
+``BP`` (base-pair positino),
+``A1``, ``A2`` (reference and other allele).
+The next column, ``FRQ``, contains frequency of ``A1`` allele.
+Subsequent columns contain effect size w.r.t. ``A1``, one column for each of the ``--num-component`` components.
+Depending on ``--norm-effect`` flag, effect sizes could be either in
+units of additively coded 0,1,2 genotypes (default behavior), or
+in units of normalized genotypes, e.i. 0,1,2 genotypes divided by ``sqrt(2*p(1-p))``, where p is allele frequency.
+Example of ``.causals`` file:
+```
+SNP     CHR     POS     A1      A2      FRQ     BETA_c1
+rs72651487      1       19706089        A       G       0.285715        -0.0335917
+rs28631635      1       25728930        G       T       0.432055        0.0603244
+rs67388349      1       28722149        C       CT      0.37678 -0.0527829
+```
+
+An optional argument ``--causal-variants`` allows to specify a file that explicitly lists causal variants and,
+optionally, their effect sizes. The file must be whitespace-delimited table without header, containing one row per causal variant.
+First column must contain marker name (to be matched with SNP column from `.bim` file). 
+The remaining columns may contain effect sizes. For two-trait simulations there must be two effect size columns, e.i. effect size in each trait. Depending on ``--norm-effect`` flag, input effect sizes will be treated either as in
+units of additively coded 0,1,2 genotypes (default behavior), or
+in units of normalized genotypes, e.i. 0,1,2 genotypes divided by ``sqrt(2*p(1-p))``, where p is allele frequency.
+An example of file for ``--causal-variants``:
+```
+rs72651487 -0.0335917
+rs28631635 0.0603244
+rs67388349 -0.0527829
+```
+The format for an optional argument ``--causal-regions`` is the same as ``--causal-variants``, except it must have only the list of marker names, but not their effect sizes.
+
+Command line options
+--------------------
 ```
 SIMU v0.9.0 - library for simulation of GWAS summary statistics:
   -h [ --help ]             produce this help message
