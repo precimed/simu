@@ -21,6 +21,12 @@ In this case you may also want to use ``--norm-effect`` flag to report effect si
 Getting started
 ---------------
 
+For Linux and Unix, download pre-compiled SIMU binary [here](https://github.com/precimed/simu/releases/download/v0.9/simu).
+For MacOS, refer to instructions *Compile SIMU on your machine* (see below).
+For updates check out [Releases page](https://github.com/precimed/simu/releases) of this repository.
+
+Compile SIMU on your machine
+----------------------------
 ``SUMU`` is written in `C++`, and as of today you need to compile it on your machine.
 ``SIMU`` can only run on Linux / Unix and MAC, but not on Windows.
 
