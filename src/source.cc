@@ -33,7 +33,6 @@
 #include <map>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/math/special_functions/fpclassify.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
 #include <boost/random/normal_distribution.hpp>
@@ -113,6 +112,7 @@ class Logger {
   Logger& operator<< ( const T& rhs) {
     std::cout << rhs;
     log_file_ << rhs;
+    log_file_.flush();
     return *this;
   }
 
