@@ -22,10 +22,8 @@ Getting started
 ---------------
 
 ``SIMU`` is written in `C++` and is available for Linux / Unix and MacOS, but not for Windows.
-You may download pre-compiled SIMU binary [here](https://github.com/precimed/simu/releases/download/v0.9/simu).
+You may download pre-compiled SIMU binary from the [Releases page](https://github.com/precimed/simu/releases) of this repository.
 To test type ``simu --help``, which should produce a list of available options.
-
-For updates check out [Releases page](https://github.com/precimed/simu/releases) of this repository.
 You may also build ``SIMU`` on your machine (see instructions further below).
 
 Getting help
