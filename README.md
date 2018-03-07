@@ -1,5 +1,5 @@
 SIMU simulats a GWAS based on real genotype data.
-This tool is a comprehensive extension of ``gcta --simu-qt`` and ``gcta --simu-cc`` functionality,
+This tool is a extension of ``gcta --simu-qt`` and ``gcta --simu-cc`` functionality,
 described [here](http://cnsgenomics.com/software/gcta/#GWASSimulation).
 Additional features include
 * simulation of two traits (``--num-traits 2``), with given genetic correlation (``--rg``)
@@ -21,33 +21,12 @@ In this case you may also want to use ``--norm-effect`` flag to report effect si
 Getting started
 ---------------
 
-For Linux and Unix, download pre-compiled SIMU binary [here](https://github.com/precimed/simu/releases/download/v0.9/simu).
-For MacOS, refer to instructions *Compile SIMU on your machine* (see below).
+``SIMU`` is written in `C++` and is available for Linux / Unix and MacOS, but not for Windows.
+You may download pre-compiled SIMU binary [here](https://github.com/precimed/simu/releases/download/v0.9/simu).
+To test type ``simu --help``, which should produce a list of available options.
+
 For updates check out [Releases page](https://github.com/precimed/simu/releases) of this repository.
-
-Compile SIMU on your machine
-----------------------------
-``SUMU`` is written in `C++`, and as of today you need to compile it on your machine.
-``SIMU`` can only run on Linux / Unix and MAC, but not on Windows.
-
-* Step 1. Install prerequisites. On Ubuntu: ``sudo apt-get install git build-essential libboost-all-dev cmake``.
-* Step 2. Clone this repository: ``git clone --recurse-submodules https://github.com/precimed/simu.git``.
-  Note that this repository includes submodules. If you use older version of git you may want to review [this](https://stackoverflow.com/questions/3796927/how-to-git-clone-including-submodules).
-* Step 3. Install to default location:
-```
-mkdir build && cd build
-cmake ..
-make && sudo make install
-```
-This will create place ``simu`` executable to ``/usr/local/bin`` folder.
-* Step 3'. Install to a custom location:
-```
-mkdir build && cd build
-cmake .. -DCMAKE_INSTALL_PREFIX:PATH=~
-make && make install
-```
-This will create place ``simu`` executable to your ``$HOME/bin`` folder.
-* Step 4. Enjoy, ``simu`` is ready. Type ``simu --help`` to list available options.
+You may also build ``SIMU`` on your machine (see instructions further below).
 
 Getting help
 ------------
@@ -205,3 +184,27 @@ Examples:
 * Simulate a quantitative trait where n=10 causal markers are randomly distributed among specific region:
   simu --bfile test --qt --causal-n 10 --causal-regions snplist --hsq 0.5
 ```
+
+Compile SIMU on your machine
+----------------------------
+
+Check out [Releases page](https://github.com/precimed/simu/releases) for pre-compiled binaries.
+
+* Step 1. Install prerequisites. On Ubuntu: ``sudo apt-get install git build-essential libboost-all-dev cmake``.
+* Step 2. Clone this repository: ``git clone --recurse-submodules https://github.com/precimed/simu.git``.
+  Note that this repository includes submodules. If you use older version of git you may want to review [this](https://stackoverflow.com/questions/3796927/how-to-git-clone-including-submodules).
+* Step 3. Install to default location:
+```
+mkdir build && cd build
+cmake ..
+make && sudo make install
+```
+This will create place ``simu`` executable to ``/usr/local/bin`` folder.
+* Step 3'. Install to a custom location:
+```
+mkdir build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX:PATH=~
+make && make install
+```
+This will create place ``simu`` executable to your ``$HOME/bin`` folder.
+* Step 4. Enjoy, ``simu`` is ready. Type ``simu --help`` to list available options.
