@@ -17,7 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "v0.9.1"
+#define VERSION "v0.9.2"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -57,6 +57,7 @@ namespace po = boost::program_options;
 struct SimuOptions {
   std::string bfile;
   std::string bfile_chr;
+  std::vector<std::string> chr_labels;
   bool qt;
   bool cc;
   int num_traits;
@@ -417,15 +418,21 @@ void read_causal_variants_file(std::string file, Logger* log,
 
 void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& log,
                       PioFiles* pio_files) {
+  // initialize chr_labels
+  if (simu_options.chr_labels.empty()) {
+    for (int i = 1; i <= 22; i++)
+      simu_options.chr_labels.push_back(boost::lexical_cast<std::string>(i));
+  }
+
   // Validate and pre-process --bfile / --bfile-chr options.
   if (simu_options.bfile.empty() && simu_options.bfile_chr.empty())
     throw std::invalid_argument(std::string("ERROR: Either --bfile or --bfile-chr must be specified"));
   if (!simu_options.bfile_chr.empty()) {
     if (!boost::contains(simu_options.bfile_chr, "@"))
       simu_options.bfile_chr.append("@");
-    for (int chri = 1; chri <= 22; chri++) {
+    for (auto chrlabel: simu_options.chr_labels) {
       simu_options.bfiles.push_back(simu_options.bfile_chr);
-      boost::replace_all(simu_options.bfiles.back(), "@", boost::lexical_cast<std::string>(chri));
+      boost::replace_all(simu_options.bfiles.back(), "@", chrlabel);
     }
   } else {
     simu_options.bfiles.push_back(simu_options.bfile);
@@ -1024,6 +1031,7 @@ main(int argc, char *argv[])
         "across 22 chromosomes. If the filename prefix contains the symbol @, SIMU will "
         "replace the @ symbol with chromosome numbers. Otherwise, SIMU will append chromosome "
         "numbers to the end of the filename prefix.")
+      ("chr-labels", po::value(&simu_options.chr_labels)->multitoken(), "Set of chromosome labels. Defaults to '1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22'")
       ("qt", po::bool_switch(&simu_options.qt)->default_value(false), "simulate quantitative trait")
       ("cc", po::bool_switch(&simu_options.cc)->default_value(false), "simulate case/control trait")
       ("num-traits", po::value(&simu_options.num_traits)->default_value(1), "number of traits (either 1 or 2 traits are supported)")
