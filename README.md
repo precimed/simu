@@ -26,6 +26,12 @@ You may download pre-compiled SIMU binary from the [Releases page](https://githu
 To test type ``simu --help``, which should produce a list of available options.
 You may also build ``SIMU`` on your machine (see instructions further below).
 
+To run ``SIMU`` you need some genotypes. We've prepared a set of synthetic genotypes for 100K ``individuals`` and ca. 11M markers.
+It was produced by running [hapgen2](http://mathgen.stats.ox.ac.uk/genetics_software/hapgen/hapgen2.html) software using EUR population from 1000 Genomes Phase 3 data as a reference (503 individuals).
+
+This set is for download from here: https://www.dropbox.com/sh/0i7wkqtsrq3m7cj/AADjJIJ2sH0t-p2T42nGuC0_a?dl=0 .
+
+
 Getting help
 ------------
 
