@@ -17,7 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "v0.9.2"
+#define VERSION "v0.9.3"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -82,6 +82,7 @@ struct SimuOptions {
 
   std::string out;
   boost::int64_t seed;
+  int trait2_snp_offset;
   bool verbose;
 
   // derived options
@@ -94,6 +95,7 @@ struct SimuOptions {
   SimuOptions() {
     num_samples = -1;
     num_variants = 0;
+    trait2_snp_offset = 0;
     boost::posix_time::ptime const time_epoch(boost::gregorian::date(1970, 1, 1));
     seed = (boost::posix_time::microsec_clock::local_time() - time_epoch).ticks();
     verbose = false;
@@ -657,6 +659,25 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
     simu_options.causal_pi.clear();
   }
 
+  if (simu_options.trait2_snp_offset != 0) {
+    if (simu_options.num_traits != 2)
+      throw std::invalid_argument(std::string("ERROR: --trait2-snp-offset is applicable only to --num-traits 2"));
+    if (simu_options.num_components != 1)
+      throw std::invalid_argument(std::string("ERROR: --trait2-snp-offset is supported only for --num-components 1"));
+    if (!simu_options.causal_regions.empty())
+      throw std::invalid_argument(std::string("ERROR: --trait2-snp-offset is incompatible with --causal-regions"));
+    if (!simu_options.causal_variants.empty())
+      throw std::invalid_argument(std::string("ERROR: --trait2-snp-offset is incompatible with --causal-variants"));
+    if (!simu_options.rg[0] != DEFAULT_RG)
+      throw std::invalid_argument(std::string("ERROR: --trait2-snp-offset is incompatible with --rg"));
+
+    // technical trick: the easiest way to implement --trait2-snp-ofset is to say that there are 3 components.
+    // - component 1 contains all variants causal in trait1 but not in trait2
+    // - component 2 contains all variants causal in trait2 but not in trait1
+    // - component 3 contains all variants causal in both traits (which happens if, just by chance, applying the offset hits a completely strange variant)  
+    simu_options.num_components = 3;
+  }
+
   // if (vm.count("seed") == 0)
   //  log << "--seed option was set to " << simu_options.seed << "\n";
 }
@@ -686,6 +707,34 @@ void describe_simu_options(SimuOptions& s, Logger& log) {
   if (s.gcta_sigma) log << "\t--gcta-sigma \\\n";
   if (s.norm_effect) log << "\t--norm-effect \\\n";
   log << "\n";
+}
+
+void find_causals_trait2_snp_offset(const SimuOptions& simu_options, boost::mt19937& rng, Logger& log, PioFiles* pio_files,
+                  std::vector<int>* component_per_variant,
+                  std::vector<double>* effect1_per_variant,
+                  std::vector<double>* effect2_per_variant) {
+  component_per_variant->clear();
+  for (int i = 0; i < simu_options.num_variants; i++) component_per_variant->push_back(-1);
+  boost::variate_generator<boost::mt19937&, boost::uniform_int<> > random_integer(rng, boost::uniform_int<>());
+
+  std::vector<int> variant_indices_permutation;
+  for (int i = 0; i < simu_options.num_variants; i++) variant_indices_permutation.push_back(i);
+  std::random_shuffle(variant_indices_permutation.begin(), variant_indices_permutation.end(), random_integer);
+
+  int causal_n = simu_options.causal_n[0];
+
+  int permuted_index = 0;
+  for (int causal_index = 0; causal_index < causal_n; causal_index++, permuted_index++) {
+    int snp_index_trait1 = variant_indices_permutation[permuted_index];
+    int snp_index_trait2 = (snp_index_trait1 + simu_options.trait2_snp_offset) % simu_options.num_variants;
+    component_per_variant->at(snp_index_trait1) += 1;
+    component_per_variant->at(snp_index_trait2) += 2;
+  }
+
+  // basic validation - all components should be -1, 0, 1 or 2.
+  for (int i = 0; i < simu_options.num_variants; i++)
+    if (component_per_variant->at(i) >= 3)
+      throw std::runtime_error("error in simu logic, (component_per_variant->at(i) >= 3)");
 }
 
 void find_causals(const SimuOptions& simu_options, boost::mt19937& rng, Logger& log, PioFiles* pio_files,
@@ -829,6 +878,29 @@ void find_effect_sizes(const SimuOptions& simu_options, boost::mt19937& rng,
     if (component_per_variant[i] == -1) continue;
     double sigma = sqrt(simu_options.trait1_sigsq[component_per_variant[i]]);
     effect1_per_variant->at(i) = sigma * random_normal();
+  }
+}
+
+void find_effect_sizes_bivariate_trait2_snp_offset(const SimuOptions& simu_options, boost::mt19937& rng,
+                                 const std::vector<int>& component_per_variant,
+                                 std::vector<double>* effect1_per_variant,
+                                 std::vector<double>* effect2_per_variant) {
+  // generate vector of effect sizes (for trait1 and trait2) for each variant
+  effect1_per_variant->clear(); effect2_per_variant->clear();
+  for (int i = 0; i < simu_options.num_variants; i++) {
+    effect1_per_variant->push_back(0.0);
+    effect2_per_variant->push_back(0.0);
+  }
+
+  boost::variate_generator<boost::mt19937&, boost::normal_distribution<> > random_normal(rng, boost::normal_distribution<>());
+
+  for (int i = 0; i < simu_options.num_variants; i++) {
+    if (component_per_variant[i] == -1) continue;
+    double sigma1 = sqrt(simu_options.trait1_sigsq[0]);
+    double sigma2 = sqrt(simu_options.trait2_sigsq[0]);
+    double x1 = random_normal(); double x2 = random_normal();
+    if (component_per_variant[i] == 0 || component_per_variant[i] == 2) effect1_per_variant->at(i) = sigma1 * x1;
+    if (component_per_variant[i] == 1 || component_per_variant[i] == 2) effect2_per_variant->at(i) = sigma2 * x2;
   }
 }
 
@@ -1060,6 +1132,7 @@ main(int argc, char *argv[])
        "Default behavior without --norm-effect is to report effect size w.r.t. additively coded 0,1,2 genotypes.")
       ("rg", po::value< std::vector<float> >(&simu_options.rg)->multitoken(), "coefficient of genetic correlation; by default 0.0; one value per mixture component")
       ("seed", po::value(&simu_options.seed), "seed for random numbers generator (default is time-dependent seed)")
+      ("trait2-snp-offset", po::value(&simu_options.trait2_snp_offset), "shifts causal variant in trait2 by a given number of positions (for example, '--trait2-snp-offset 1' indicates that causal SNPs will correspond to adjacent rows in the input bim file)")
       ("out", po::value(&simu_options.out)->default_value("simu"),
        "prefix of the output files; will generate .pheno file containing synthesized phenotypes; "
       "and .*.causals files (one file per trait) containing lists of causal variants and their effect sizes for each component in the mixture. "
@@ -1130,7 +1203,11 @@ main(int argc, char *argv[])
       // Find component for causal variants
       std::vector<int> component_per_variant;
       std::vector<double> effect1_per_variant, effect2_per_variant;
-      find_causals(simu_options, rng, log, &pio_files, &component_per_variant, &effect1_per_variant, &effect2_per_variant);
+      if (simu_options.trait2_snp_offset == 0) {
+        find_causals(simu_options, rng, log, &pio_files, &component_per_variant, &effect1_per_variant, &effect2_per_variant);
+      } else {
+        find_causals_trait2_snp_offset(simu_options, rng, log, &pio_files, &component_per_variant, &effect1_per_variant, &effect2_per_variant);
+      }
 
       log << "Calculate allele frequencies (for causal markers only)... \n";
       std::vector<double> freq_vec;  // vector of allele frequency; NB! vector has -1 for non-causal variants, as we don't need them anywhere later;
@@ -1139,7 +1216,8 @@ main(int argc, char *argv[])
       // Find effect sizes for causal variants (one per trait) --- unless user provided values in --causal-variants file
       if (effect1_per_variant.empty()) {
         log << "Generate effect sizes from normal distribution...\n";
-        if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
+        if (simu_options.trait2_snp_offset != 0) find_effect_sizes_bivariate_trait2_snp_offset(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);  
+        else if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
         else find_effect_sizes_bivariate(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);
 
         // Apply --gcta-sigma flag

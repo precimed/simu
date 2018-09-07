@@ -154,6 +154,11 @@ SIMU v0.9.0 - library for simulation of GWAS summary statistics:
                             one value per mixture component
   --seed arg                seed for random numbers generator (default is
                             time-dependent seed)
+  --trait2-snp-offset arg   shifts causal variant in trait2 by a given
+                            number of positions (for example,
+                            '--trait2-snp-offset 1' indicates that causal
+                            SNPs will correspond to adjacent rows in the
+                            input bim file)
   --out arg (=simu)         prefix of the output files; will generate .pheno
                             file containing synthesized phenotypes; and
                             .*.causals files (one file per trait) containing
