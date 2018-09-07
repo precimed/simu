@@ -997,7 +997,7 @@ void apply_heritability(float hsq, boost::mt19937& rng, std::vector<double>* phe
   for (int i = 0; i < pheno_per_sample->size(); i++) noise.push_back(random_normal());
   
   double gen_coef = 0, env_coef = 0;
-  if ((fabs(hsq) <= FLT_EPSILON) || (fabs(pheno_var) <= FLT_EPSILON)) {
+  if ((fabs(hsq) <= std::numeric_limits<float>::epsilon()) || (fabs(pheno_var) <= std::numeric_limits<float>::epsilon())) {
     // This is an interesting case --- why there are some true casual SNPs, and yet heritability is 0?
     gen_coef = 0; env_coef = 1;
   } else {
@@ -1227,7 +1227,7 @@ main(int argc, char *argv[])
             if (component_per_variant[variant_index] == -1) continue;
             double freq = freq_vec[variant_index];
             double het = fabs(2 * freq * (1-freq));
-            if (het < FLT_EPSILON) {
+            if (het < std::numeric_limits<float>::epsilon()) {
               pio_locus_t* locus = pio_files.get_locus(variant_index);
               std::stringstream ss; ss << "Causal variant " << ((locus == nullptr) ? "rs???" : locus->name) << " has zero frequency. Can not apply --gcta-sigma.";
               throw std::runtime_error(ss.str());
@@ -1249,7 +1249,7 @@ main(int argc, char *argv[])
             if (component_per_variant[variant_index] == -1) continue;
             double freq = freq_vec[variant_index];
             double het = fabs(2 * freq * (1-freq));
-            if (het < FLT_EPSILON) {
+            if (het < std::numeric_limits<float>::epsilon()) {
               pio_locus_t* locus = pio_files.get_locus(variant_index);
               std::stringstream ss; ss << "Causal variant " << ((locus == nullptr) ? "rs???" : locus->name) << " has zero frequency. Can not apply --norm-effect.";
               throw std::runtime_error(ss.str());
