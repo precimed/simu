@@ -668,7 +668,7 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
       throw std::invalid_argument(std::string("ERROR: --trait2-snp-offset is incompatible with --causal-regions"));
     if (!simu_options.causal_variants.empty())
       throw std::invalid_argument(std::string("ERROR: --trait2-snp-offset is incompatible with --causal-variants"));
-    if (!simu_options.rg[0] != DEFAULT_RG)
+    if (simu_options.rg[0] != DEFAULT_RG)
       throw std::invalid_argument(std::string("ERROR: --trait2-snp-offset is incompatible with --rg"));
 
     // technical trick: the easiest way to implement --trait2-snp-ofset is to say that there are 3 components.
