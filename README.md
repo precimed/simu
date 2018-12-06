@@ -141,9 +141,19 @@ SIMU v0.9.0 - library for simulation of GWAS summary statistics:
   --trait2-sigsq arg        variance of effect sizes for trait2 per causal
                             marker; by default 1.0; one value per mixture
                             component
+  --trait1-s-pow arg        draw effect sizes on the first trait with variance
+                            proportional to (2*p(1-p))^S, where parameter S is
+                            defined by trait1-s-pow, and p is allele frequency;
+                            by default 0.0; one value per mixture component
+  --trait2-s-pow arg        draw effect sizes on the second trait with variance
+                            proportional to (2*p(1-p))^S, where parameter S is
+                            defined by trait2-s-pow, where p is allele
+                            frequency; by default 0.0; one value per mixture
+                            component
   --gcta-sigma              draw effect sizes with variance inversely
-                            proportional to sqrt(2*p(1-p)), where p is allele
-                            frequency.
+                            proportional to 2*p(1-p), where p is allele
+                            frequency; this corresponds to --trait1-s-pow and
+                            --trait2-s-pow set to -1.0
   --norm-effect             report effect sizes w.r.t. normalized genotypes
                             (e.i. additively coded 0,1,2 genotypes devided by
                             sqrt(2*p(1-p)), where p is allele frequency).
