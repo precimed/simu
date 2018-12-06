@@ -17,7 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define VERSION "v0.9.3"
+#define VERSION "v0.9.4"
 
 #include <stdlib.h>
 #include <stdio.h>
