@@ -72,6 +72,8 @@ struct SimuOptions {
   std::vector<std::string> causal_regions;
   std::vector<float> trait1_sigsq;
   std::vector<float> trait2_sigsq;
+  std::vector<float> trait1_s_pow;
+  std::vector<float> trait2_s_pow;
   std::vector<float> rg;
   bool gcta_sigma;
   
@@ -568,6 +570,21 @@ void fix_and_validate(SimuOptions& simu_options, po::variables_map& vm, Logger& 
       throw std::invalid_argument(std::string("ERROR: --rg values must be between -1.0 and 1.0"));
   }
 
+  // validate s-power option
+  for (int trait_index = 0; trait_index < simu_options.num_traits; trait_index++) {
+    auto& target = (trait_index==0) ? simu_options.trait1_s_pow : simu_options.trait2_s_pow;
+    if (!target.empty() && (target.size() != simu_options.num_components))
+      throw std::invalid_argument(std::string("ERROR: Number of --trait-s-pow values does not match the number of components"));
+  }
+  if (simu_options.num_traits == 1 && !simu_options.trait2_s_pow.empty()) {
+    log << "WARNING: Option --trait2-s-pow will be ignored (--num-traits 1)\n";
+    simu_options.trait2_s_pow.clear();
+  }
+  if (simu_options.num_traits == 2 && !simu_options.trait1_s_pow.empty() && simu_options.trait2_s_pow.empty())
+    throw std::invalid_argument(std::string("ERROR: --trait1-s-pow and --trait2-s-pow must be both specified or absent (when --num-traits=2)"));
+  if (simu_options.gcta_sigma && (!simu_options.trait1_s_pow.empty() || !simu_options.trait2_s_pow.empty()))
+    throw std::invalid_argument(std::string("ERROR: --gcta-sigma is incompatible with --trait1-s-pow / --trait2-s-pow"));
+
   // Read bfiles (one or 22)
   for (auto bfile: simu_options.bfiles) {
     log << "Opening " << bfile << "... ";
@@ -705,6 +722,8 @@ void describe_simu_options(SimuOptions& s, Logger& log) {
   log << "\t--seed " << s.seed << " \\\n";
   if (s.verbose) log << "\t--verbose \\\n";
   if (s.gcta_sigma) log << "\t--gcta-sigma \\\n";
+  if (!s.trait1_s_pow.empty()) log << "\t--trait1-s-pow " << s.trait1_s_pow << " \\\n";
+  if (!s.trait2_s_pow.empty()) log << "\t--trait2-s-pow " << s.trait2_s_pow << " \\\n";
   if (s.norm_effect) log << "\t--norm-effect \\\n";
   log << "\n";
 }
@@ -1126,7 +1145,9 @@ main(int argc, char *argv[])
        "One file per mixture component")
       ("trait1-sigsq", po::value< std::vector<float> >(&simu_options.trait1_sigsq)->multitoken(), "variance of effect sizes for trait1 per causal marker; by default 1.0; one value per mixture component")
       ("trait2-sigsq", po::value< std::vector<float> >(&simu_options.trait2_sigsq)->multitoken(), "variance of effect sizes for trait2 per causal marker; by default 1.0; one value per mixture component")
-      ("gcta-sigma", po::bool_switch(&simu_options.gcta_sigma)->default_value(false), "draw effect sizes with variance inversely proportional to sqrt(2*p(1-p)), where p is allele frequency.")
+      ("trait1-s-pow", po::value< std::vector<float> >(&simu_options.trait1_s_pow)->multitoken(), "draw effect sizes on the first trait with variance proportional to (2*p(1-p))^S, where parameter S is defined by trait1-s-pow, and p is allele frequency; by default 0.0; one value per mixture component")
+      ("trait2-s-pow", po::value< std::vector<float> >(&simu_options.trait2_s_pow)->multitoken(), "draw effect sizes on the second trait with variance proportional to (2*p(1-p))^S, where parameter S is defined by trait2-s-pow, where p is allele frequency; by default 0.0; one value per mixture component")
+      ("gcta-sigma", po::bool_switch(&simu_options.gcta_sigma)->default_value(false), "draw effect sizes with variance inversely proportional to 2*p(1-p), where p is allele frequency; this corresponds to --trait1-s-pow and --trait2-s-pow set to -1.0")
       ("norm-effect", po::bool_switch(&simu_options.norm_effect)->default_value(false),
        "report effect sizes w.r.t. normalized genotypes (e.i. additively coded 0,1,2 genotypes devided by sqrt(2*p(1-p)), where p is allele frequency). "
        "Default behavior without --norm-effect is to report effect size w.r.t. additively coded 0,1,2 genotypes.")
@@ -1220,29 +1241,34 @@ main(int argc, char *argv[])
         else if (simu_options.num_traits==1) find_effect_sizes(simu_options, rng, component_per_variant, &effect1_per_variant);
         else find_effect_sizes_bivariate(simu_options, rng, component_per_variant, &effect1_per_variant, &effect2_per_variant);
 
-        // Apply --gcta-sigma flag
-        if (simu_options.gcta_sigma) {
-          log << "Apply --gcta-sigma option to effect sizes...\n";
+        // Apply --gcta-sigma flag or --trait1-s-pow, --trait2-s-pow
+        if (simu_options.gcta_sigma || !simu_options.trait1_s_pow.empty()) {
+          log << "Apply --gcta-sigma or --trait1-s-pow, --trait2-s-pow options to effect sizes...\n";
           for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
             if (component_per_variant[variant_index] == -1) continue;
             double freq = freq_vec[variant_index];
             double het = fabs(2 * freq * (1-freq));
             if (het < std::numeric_limits<float>::epsilon()) {
               pio_locus_t* locus = pio_files.get_locus(variant_index);
-              std::stringstream ss; ss << "Causal variant " << ((locus == nullptr) ? "rs???" : locus->name) << " has zero frequency. Can not apply --gcta-sigma.";
+              std::stringstream ss; ss << "Causal variant " << ((locus == nullptr) ? "rs???" : locus->name) << " has zero frequency. Can not apply --gcta-sigma or --trait1-s-pow, --trait2-s-pow ";
               throw std::runtime_error(ss.str());
             }
 
-            effect1_per_variant[variant_index] /= sqrt(het);
-            if (simu_options.num_traits==2) effect2_per_variant[variant_index] /= sqrt(het);
+            double trait1_s_pow = simu_options.gcta_sigma ? -1.0 : simu_options.trait1_s_pow[component_per_variant[variant_index]];
+            effect1_per_variant[variant_index] *= sqrt(pow(het, trait1_s_pow));
+
+            if (simu_options.num_traits==2) {
+              double trait2_s_pow = simu_options.gcta_sigma ? -1.0 : simu_options.trait2_s_pow[component_per_variant[variant_index]];
+              effect2_per_variant[variant_index] *= sqrt(pow(het, trait2_s_pow));
+            }
           }
         }
       } else {
         log << "Use effect sizes provided in --causal-variants file.\n";
         if (simu_options.num_components > 1)
           log << "WARNING: when --causal-variants contain effect sizes there is no real need to use more than one component (--num-components), isn't it so?\n";
-        if (simu_options.gcta_sigma || (vm.count("trait1-sigsq") > 0) || (vm.count("trait2-sigsq") > 0) || (vm.count("rg") > 0))
-          log << "WARNING: Options --gcta-sigma, --trait1-sigsq, --trait2-sigsq, --rg are irrelevant and will be ignored.\n";
+        if (simu_options.gcta_sigma || (vm.count("trait1-sigsq") > 0) || (vm.count("trait2-sigsq") > 0) || (vm.count("rg") > 0) || (vm.count("trait1-s-pow") > 0) || (vm.count("trait2-s-pow") > 0))
+          log << "WARNING: Options --gcta-sigma, --trait1-sigsq, --trait2-sigsq, --rg, --trait1-s-pow, --trait2-s-pow are irrelevant and will be ignored.\n";
         if (simu_options.norm_effect) {
           log << "NB! due to --norm-effect option, all effect sizes from --causal-variants will be treated as per-normalized-genotypes effect sizes\n";
           for (int variant_index = 0; variant_index < simu_options.num_variants; variant_index++) {
