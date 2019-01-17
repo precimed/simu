@@ -35,10 +35,10 @@ parser.add_argument('--hapgen', action="store", dest="bstem", default='/usit/abe
 parser.add_argument('--gen', action="store", dest="gstem",default='/work/users/oleksanf/MMIL/1000Genome/phase3/build37_released/EUR', help="hap and legend file folders")
 parser.add_argument('--recomb', action="store", dest="rstem",default='/work/users/oleksanf/MMIL/1000Genome/phase3/build37_released/recombination_map', help="recombination maps folders")
 parser.add_argument('--pop', action="store", dest="popf",default='EUR', help="Type of allele frequencies, EUR, EAS, AMR, or AFR")
-parser.add_argument('--controls', dest="controls", default=100000, action="store", help="Number of controls we wish to generate")
+parser.add_argument('--controls', dest="controls", default=10000, action="store", help="Number of controls we wish to generate")
 parser.add_argument('--chunk_int', dest="chunk", default=10000, action="store", help="Chunk size for each output")
 parser.add_argument('--db', action="store", dest="db", default="/work/users/oleksanf/MMIL/cfan_SQLdb/Functional_Annot_1kGP_hg19.db", help="SQL database use for allele frequencies and physical positions")
-parser.add_argument('--out', action="store", dest="output", default=None, help="output absolute path and prefix")
+parser.add_argument('--out', action="store", dest="output", default="/work/users/oleksanf/hapmap2_results", help="output absolute path and prefix")
 parser.add_argument('--tmp', action="store", dest="tmp", default="/work/users/oleksanf/tmp", help="place for temporary script shells")
 args = parser.parse_args()
 
@@ -59,6 +59,9 @@ def get_file(chrnum):
   INHAP = [x for x in sorted(os.listdir(GSTEM)) if re.search(pattern,x) and x.endswith('.hap')]
   INLEGEND = [x for x in sorted(os.listdir(GSTEM)) if re.search(pattern,x) and x.endswith('.legend')]
   INRECOMB = [x for x in sorted(os.listdir(RSTEM)) if re.search(pattern,x) and x.endswith('.txt')]
+  if not INHAP: INHAP = ['xxx.INHAP.hap']
+  if not INLEGEND: INLEGEND=['xxx.INLEGEND.legend']
+  if not INRECOMB: INRECOMB=['xxx.INRECOMB.txt']
   return GSTEM + '/' + INHAP[0], GSTEM + '/' + INLEGEND[0], RSTEM + '/' + INRECOMB[0]
 
 def generate_cmd(INHAP, INLEGEND, INRECOMB, pos_SNP, pos_INI, pos_END, OUTFILE):
@@ -120,6 +123,8 @@ get_para = GetParametersOf()
 # Execute part
 # Currently simulate all chromosomes from 1kGP in the mmil cluster 4
 
+f = open('chunks.txt', 'w')
+f.write('CHR\tCHUNK\tTSNP\tFROM\tTO\n')
 for i in range(1,23):
   INHAP, INLEGEND, INRECOMB = get_file(i)  
   k = 1
@@ -127,13 +132,14 @@ for i in range(1,23):
     simuout = OUTSTEM + '_chr' + str(i) + '_chunk' + str(k) + '.gz' 
     cmd0 = generate_cmd(INHAP, INLEGEND, INRECOMB, chunki[0], chunki[1], chunki[2], simuout)
     tmp_fname = TMPDIR + '/tmp_script_chr' + str(i) + '_chunk' + str(k) + '.sh'
-    write_tmp(tmp_fname, cmd0)
+    #write_tmp(tmp_fname, cmd0)
     tmp_log = TMPDIR + '/tmp_script_chr' + str(i) + '_chunk' + str(k)
     cmdsub = 'qsub -hard -l h_vmem=32G -e ' + tmp_log + '_1' + ' -o ' + tmp_log + '_2' + ' -N Simu_chr' + str(i) + '_' + str(k) + ' ' + tmp_fname + '\n'
     #os.system('ssh -XY 169.228.56.67 ' + cmdsub)
+    f.write('{}\t{}\t{}\t{}\t{}\n'.format(i, k, chunki[0], chunki[1], chunki[2]))
     print(cmdsub)
     k += 1
-
+f.close()
 
 
 
