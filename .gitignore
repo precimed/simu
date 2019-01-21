@@ -1,3 +1,4 @@
 # Ignore .mat files (for now)
 *.mat
+slurm*out
 
