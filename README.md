@@ -1,4 +1,4 @@
-SIMU simulats a GWAS based on real genotype data.
+SIMU simulates a GWAS based on real genotype data.
 This tool is a extension of ``gcta --simu-qt`` and ``gcta --simu-cc`` functionality,
 described [here](http://cnsgenomics.com/software/gcta/#GWASSimulation).
 Additional features include
