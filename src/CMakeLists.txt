@@ -5,6 +5,6 @@ set(SRC_LIST
 )
 
 add_executable(simu ${SRC_LIST})
-target_link_libraries(simu libplinkio libcsv ${Boost_LIBRARIES})
+target_link_libraries(simu libplinkio-static libcsv ${Boost_LIBRARIES})
 
 install( TARGETS simu DESTINATION bin )
