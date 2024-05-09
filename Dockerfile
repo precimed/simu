@@ -22,7 +22,7 @@ RUN apt-get install -y \
 
 # (Optional) Run any setup scripts provided by the software
 RUN bash ./setup.sh
-RUN export PATH=$PATH:/simu/build/bin/simu
+RUN export PATH=$PATH:/simu/bin
 
 # (Optional) Expose any necessary ports
 # EXPOSE <port>
