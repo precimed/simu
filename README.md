@@ -232,10 +232,13 @@ Docker
 ------
 
 ```
+# Navigate to simu directory
 cd simu
 
+# Build docker image, using Dockerfile
 docker build -t simu .
 
+# Run a command using Docker image
 docker run simu \
-    sim --help
+    simu --help
 ```
