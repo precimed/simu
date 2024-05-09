@@ -227,18 +227,3 @@ make && make install
 ```
 This will create place ``simu`` executable to your ``$HOME/bin`` folder.
 * Step 4. Enjoy, ``simu`` is ready. Type ``simu --help`` to list available options.
-
-Docker
-------
-
-```
-# Navigate to simu directory
-cd simu
-
-# Build docker image, using Dockerfile
-docker build -t simu .
-
-# Run a command using Docker image
-docker run simu \
-    simu --help
-```
