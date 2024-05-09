@@ -21,6 +21,8 @@ endif (NOT Boost_FOUND)
 
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME_LIBS   ON)
+set(Boost_USE_STATIC ON)
+set(Boost_USE_STATIC_LIBS   ON)
 set(SIMU_BOOST_COMPONENTS program_options filesystem system)
 find_package(Boost COMPONENTS REQUIRED ${SIMU_BOOST_COMPONENTS})
 if (NOT Boost_FOUND)
