@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 2.8)
 
 project(simu)
 
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
 
 set(CMAKE_BUILD_TYPE "Release")
 message("-- Build type: ${CMAKE_BUILD_TYPE}")
@@ -21,6 +21,8 @@ endif (NOT Boost_FOUND)
 
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME_LIBS   ON)
+set(Boost_USE_STATIC ON)
+set(Boost_USE_STATIC_LIBS   ON)
 set(SIMU_BOOST_COMPONENTS program_options filesystem system)
 find_package(Boost COMPONENTS REQUIRED ${SIMU_BOOST_COMPONENTS})
 if (NOT Boost_FOUND)
@@ -42,7 +44,7 @@ else (COMPILER_SUPPORTS_CXX11)
 endif (COMPILER_SUPPORTS_CXX11)
 
 SET(DISABLE_TESTS ON CACHE BOOL "Disables building tests.")
-SET(DISABLE_SHARED_LIBRARY ON CACHE BOOL "Disables building shared libraries.")
+SET(DISABLE_SHARED_LIBRARY OFF CACHE BOOL "Disables building shared libraries.")
 
 add_subdirectory( libplinkio )
 add_subdirectory( src )

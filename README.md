@@ -1,4 +1,4 @@
-SIMU simulats a GWAS based on real genotype data.
+SIMU simulates a GWAS based on real genotype data.
 This tool is a extension of ``gcta --simu-qt`` and ``gcta --simu-cc`` functionality,
 described [here](http://cnsgenomics.com/software/gcta/#GWASSimulation).
 Additional features include
@@ -227,3 +227,23 @@ make && make install
 ```
 This will create place ``simu`` executable to your ``$HOME/bin`` folder.
 * Step 4. Enjoy, ``simu`` is ready. Type ``simu --help`` to list available options.
+
+
+Docker
+------
+
+We provide a [Dockerfile](Dockerfile) reciple for building an image with ``simu``, for use on any platform that supports Docker.
+
+To build the image, run:
+```
+docker build -t simu -f Dockerfile .
+```
+
+To run the image, use:
+```
+docker run -it simu --help
+```
+
+Depending on the host machine type, it may be good to add the ``--platform linux/amd64`` or ``--platform linux/arm64`` flag to the ``docker build`` and ``docker run`` commands.
+
+For mounting volumes and directories on the host machine for use with ``simu``, see the [Docker documentation](https://docs.docker.com/storage/volumes/).

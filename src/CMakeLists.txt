@@ -5,7 +5,6 @@ set(SRC_LIST
 )
 
 add_executable(simu ${SRC_LIST})
-set_target_properties(simu PROPERTIES LINK_FLAGS "-static" )
-target_link_libraries(simu ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libplinkio.a ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libcsv.a ${Boost_LIBRARIES})
+target_link_libraries(simu libplinkio-static libcsv ${Boost_LIBRARIES})
 
 install( TARGETS simu DESTINATION bin )
